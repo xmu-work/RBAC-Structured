@@ -1,0 +1,26 @@
+/* 全局基础样式：只放 reset 与全局规则，视觉一律引用 tokens.css 令牌 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-page);
+}
+
+.is-permission-disabled {
+  cursor: not-allowed !important;
+  opacity: 0.48;
+}

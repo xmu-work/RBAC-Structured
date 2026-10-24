@@ -1,0 +1,80 @@
+/* ==========================================================================
+   设计令牌（契约 9.1-2：先于一切组件产出，全项目唯一视觉来源）
+   命名：--{类别}-{语义}[-{变体}]（契约 2.2）
+   约束：组件样式只允许 var(--*) 引用本文件令牌，禁止硬编码色值与 px
+   ========================================================================== */
+:root {
+  /* ---- 颜色：品牌 ---- */
+  --color-primary: #2f54eb;
+  --color-primary-dark: #1d39c4;
+  --color-primary-light: #5c7cf0;
+  --color-primary-light-5: #8ba0f4;
+  --color-primary-light-7: #bcc8f9;
+  --color-primary-light-8: #d4dcfb;
+  --color-primary-light-9: #edf1fe;
+  --color-success: #52c41a;
+  --color-warning: #fa8c16;
+  --color-danger: #f5222d;
+  --color-info: #8c8c8c;
+
+  /* ---- 颜色：背景 ---- */
+  --color-bg-page: #f5f6fa;
+  --color-bg-card: #fff;
+  --color-bg-hover: #f0f3ff;
+  --color-bg-mask: rgb(0 0 0 / 45%);
+
+  /* ---- 颜色：文本 ---- */
+  --color-text-primary: #1f2329;
+  --color-text-regular: #3c4353;
+  --color-text-secondary: #8a919f;
+  --color-text-placeholder: #b8bdc9;
+  --color-text-inverse: #fff;
+
+  /* ---- 颜色：边框 ---- */
+  --color-border-base: #d9dee8;
+  --color-border-light: #e8ebf2;
+
+  /* ---- 间距（4px 基栅） ---- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ---- 字号 ---- */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-title: 24px;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-round: 999px;
+
+  /* ---- 阴影 ---- */
+  --shadow-card: 0 1px 4px rgb(31 35 41 / 8%);
+  --shadow-popover: 0 4px 16px rgb(31 35 41 / 12%);
+  --shadow-header: 0 1px 4px rgb(31 35 41 / 6%);
+
+  /* ---- 布局尺寸（结构令牌，供布局容器引用） ---- */
+  --layout-header-height: 56px;
+  --layout-sidebar-width: 220px;
+  --layout-sidebar-collapsed-width: 64px;
+  --layout-tabs-height: 40px;
+  --layout-content-min-height: 520px;
+  --layout-login-card-width: 420px;
+  --layout-result-card-width: 560px;
+
+  /* ---- 通用尺寸 ---- */
+  --border-width-base: 1px;
+  --size-page-mark: 56px;
+  --size-placeholder-mark: 72px;
+}
