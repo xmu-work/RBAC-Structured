@@ -83,6 +83,12 @@ export const useDictStore = defineStore('dict', () => {
     }
   }
 
+  /** 字典新增登记后强制重拉（loadDataScopes 有 loaded 短路保护） */
+  async function refreshDataScopes(): Promise<void> {
+    dataScopesLoaded.value = false
+    await loadDataScopes()
+  }
+
   return {
     accountStatusOptions,
     roleTypeOptions,
@@ -98,5 +104,6 @@ export const useDictStore = defineStore('dict', () => {
     dataScopesError,
     dataScopeOptions,
     loadDataScopes,
+    refreshDataScopes,
   }
 })
