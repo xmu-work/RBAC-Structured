@@ -1,6 +1,8 @@
 package com.iam.platform.interfaces.admin;
 
 import com.iam.platform.application.account.AccountService;
+import com.iam.platform.application.account.UserView;
+import com.iam.platform.common.result.PageResult;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamUser;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/users")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -26,40 +28,44 @@ public class UserController {
      * 创建用户。
      */
     @PostMapping
-    public Result<IamUser> create(@RequestParam String userNo,
-                                  @RequestParam String realName,
-                                  @RequestParam String phone,
-                                  @RequestParam Long orgId,
-                                  @RequestParam(required = false) String post) {
-        throw new UnsupportedOperationException("待实现");
+    public Result<UserView> create(@RequestParam String userNo,
+                                   @RequestParam(required = false) String password,
+                                   @RequestParam String realName,
+                                   @RequestParam(required = false) String phone,
+                                   @RequestParam Long orgId,
+                                   @RequestParam(required = false) String post) {
+        return Result.success(accountService.toView(
+                accountService.createUser(userNo, password, realName, phone, orgId, post)));
     }
 
     /**
      * 查询用户详情。
      */
     @GetMapping("/{userId}")
-    public Result<IamUser> get(@PathVariable Long userId) {
-        throw new UnsupportedOperationException("待实现");
+    public Result<UserView> get(@PathVariable Long userId) {
+        return Result.success(accountService.toView(accountService.getUser(userId)));
     }
 
     /**
      * 分页查询用户列表。
      */
     @GetMapping
-    public Result<Page<IamUser>> list(@RequestParam(defaultValue = "1") int page,
-                                      @RequestParam(defaultValue = "20") int size,
-                                      @RequestParam(required = false) Long orgId,
-                                      @RequestParam(required = false) String accountStatus) {
-        throw new UnsupportedOperationException("待实现");
+    public Result<PageResult<UserView>> list(@RequestParam(defaultValue = "1") int page,
+                                             @RequestParam(defaultValue = "20") int size,
+                                             @RequestParam(required = false) Long orgId,
+                                             @RequestParam(required = false) String accountStatus) {
+        Page<IamUser> result = accountService.listUsers(PageRequest.of(Math.max(page, 1) - 1, size), orgId, accountStatus);
+        return Result.success(PageResult.of(result.getTotalElements(), page, size,
+                result.getContent().stream().map(accountService::toView).toList()));
     }
 
     /**
      * 变更账号状态。
      */
     @PutMapping("/{userId}/status")
-    public Result<IamUser> changeStatus(@PathVariable Long userId,
-                                        @RequestParam String targetStatus,
-                                        @RequestParam(required = false) String reason) {
-        throw new UnsupportedOperationException("待实现");
+    public Result<UserView> changeStatus(@PathVariable Long userId,
+                                         @RequestParam String targetStatus,
+                                         @RequestParam(required = false) String reason) {
+        return Result.success(accountService.toView(accountService.changeStatus(userId, targetStatus, reason)));
     }
 }

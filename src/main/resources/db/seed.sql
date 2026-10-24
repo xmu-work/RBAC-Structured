@@ -1,0 +1,66 @@
+-- ============================================================
+-- RBAC0 初始化数据：管理后台系统、功能点、超级管理员
+-- 在 schema.sql 之后执行：mysql -u root -p iam_platform < src/main/resources/db/seed.sql
+--
+-- 默认管理员：admin / Admin@123（上线后务必修改）
+-- 注意：admin 的姓名密文依赖 application.yml 中的 crypto.aes-key，修改密钥后需重新生成
+-- ============================================================
+
+SET NAMES utf8mb4;
+
+-- 1. 管理后台自身作为一个接入系统
+INSERT INTO iam_system (id, system_code, system_name, status, description, is_deleted)
+VALUES (1, 'ADMIN', '权限管理后台', 'ACTIVE', '本系统管理后台自身', 0);
+
+INSERT INTO iam_module (id, system_id, module_code, module_name, sort_no, status, is_deleted)
+VALUES (1, 1, 'MENU', '菜单', 1, 'ACTIVE', 0),
+       (2, 1, 'API', '管理端接口', 2, 'ACTIVE', 0);
+
+-- 2. 菜单功能点（ID 与前端 web/src/constants/permissions.ts 保持一致）
+INSERT INTO iam_function_point (id, module_id, point_code, point_name, action, status, is_deleted) VALUES
+(10001, 1, 'MENU_HOME',         '首页',     'VIEW', 'ACTIVE', 0),
+(10002, 1, 'MENU_ORGANIZATION', '组织机构', 'VIEW', 'ACTIVE', 0),
+(10003, 1, 'MENU_USER',         '用户管理', 'VIEW', 'ACTIVE', 0),
+(10004, 1, 'MENU_ROLE',         '角色管理', 'VIEW', 'ACTIVE', 0),
+(10005, 1, 'MENU_GRANT',        '授权管理', 'VIEW', 'ACTIVE', 0),
+(10006, 1, 'MENU_PERMISSION',   '功能权限', 'VIEW', 'ACTIVE', 0),
+(10007, 1, 'MENU_DATA_SCOPE',   '数据权限', 'VIEW', 'ACTIVE', 0),
+(10008, 1, 'MENU_AUDIT',        '审计日志', 'VIEW', 'ACTIVE', 0);
+
+-- 3. 管理端 API 功能点：鉴权拦截器按 (api_path, api_method) 匹配，未拥有者返回 403
+INSERT INTO iam_function_point (id, module_id, point_code, point_name, action, api_path, api_method, status, is_deleted) VALUES
+(20001, 2, 'USER_LIST',          '查询用户列表',     'VIEW', '/users',                      'GET',    'ACTIVE', 0),
+(20002, 2, 'USER_CREATE',        '创建用户',         'ALL',  '/users',                      'POST',   'ACTIVE', 0),
+(20003, 2, 'USER_GET',           '查询用户详情',     'VIEW', '/users/{userId}',             'GET',    'ACTIVE', 0),
+(20004, 2, 'USER_STATUS',        '变更账号状态',     'ALL',  '/users/{userId}/status',      'PUT',    'ACTIVE', 0),
+(20005, 2, 'ROLE_LIST',          '查询角色列表',     'VIEW', '/roles',                      'GET',    'ACTIVE', 0),
+(20006, 2, 'ROLE_CREATE',        '新建角色',         'ALL',  '/roles',                      'POST',   'ACTIVE', 0),
+(20007, 2, 'ROLE_GET',           '查询角色详情',     'VIEW', '/roles/{roleId}',             'GET',    'ACTIVE', 0),
+(20008, 2, 'GRANT_CREATE',       '授予角色',         'ALL',  '/roles/grants',               'POST',   'ACTIVE', 0),
+(20009, 2, 'GRANT_REVOKE',       '撤销角色',         'ALL',  '/roles/grants',               'DELETE', 'ACTIVE', 0),
+(20010, 2, 'GRANT_LIST',         '查询用户角色',     'VIEW', '/roles/grants/{userId}',      'GET',    'ACTIVE', 0),
+(20011, 2, 'SYSTEM_LIST',        '查询子系统',       'VIEW', '/systems',                    'GET',    'ACTIVE', 0),
+(20012, 2, 'SYSTEM_CREATE',      '注册子系统',       'ALL',  '/systems',                    'POST',   'ACTIVE', 0),
+(20013, 2, 'MODULE_CREATE',      '注册模块',         'ALL',  '/systems/modules',            'POST',   'ACTIVE', 0),
+(20014, 2, 'FP_CREATE',          '注册功能点',       'ALL',  '/systems/function-points',    'POST',   'ACTIVE', 0),
+(20015, 2, 'ROLE_FP_BIND',       '绑定角色功能权限', 'ALL',  '/systems/role-functions',     'POST',   'ACTIVE', 0),
+(20016, 2, 'ROLE_FP_UNBIND',     '解绑角色功能权限', 'ALL',  '/systems/role-functions',     'DELETE', 'ACTIVE', 0),
+(20017, 2, 'ROLE_FP_LIST',       '查询角色功能权限', 'VIEW', '/systems/role-functions/{roleId}', 'GET', 'ACTIVE', 0);
+
+-- 4. 超级管理员角色，拥有以上全部功能点
+INSERT INTO iam_role (id, role_code, role_name, role_type, status, description, is_deleted)
+VALUES (1, 'SUPER_ADMIN', '超级管理员', 'FUNC', 'ACTIVE', '拥有管理后台全部功能权限', 0);
+
+INSERT INTO iam_role_function (role_id, function_point_id, allowed_action)
+SELECT 1, id, action FROM iam_function_point WHERE module_id IN (1, 2);
+
+-- 5. 管理员账号 admin / Admin@123，授予超级管理员
+INSERT INTO iam_user (id, user_no, password_hash, name_enc, name_hash, org_id, account_status, is_deleted)
+VALUES (1, 'admin',
+        'tixOSPFdKOrb2MmPToW+Lw==:C6/muNPbyI7jZnvTebxp3+ToGlVmk0/jm6wtw1pD/zg=',
+        'B4OPGWRD4NL5lmpg7NhNXVGayADahKNOd8oyfZhK9BvI9y3A52MPGnhdtw==',
+        '40d3d919f122836c04add2bf70ac897d6ca8fe5947ab539ccf5e161d817a1d19',
+        1, 'NORMAL', 0);
+
+INSERT INTO iam_user_role (user_id, role_id, effective_time, grant_reason, status)
+VALUES (1, 1, NOW(), '系统初始化', 'ACTIVE');

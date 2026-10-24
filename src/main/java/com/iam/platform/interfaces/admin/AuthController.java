@@ -4,6 +4,7 @@ import com.iam.platform.application.auth.AuthService;
 import com.iam.platform.application.auth.LoginRequest;
 import com.iam.platform.application.auth.LoginResponse;
 import com.iam.platform.common.result.Result;
+import com.iam.platform.interfaces.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -26,7 +27,7 @@ public class AuthController {
      */
     @PostMapping("/login")
     public Result<LoginResponse> login(@RequestBody LoginRequest request) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(authService.login(request));
     }
 
     /**
@@ -34,7 +35,8 @@ public class AuthController {
      */
     @PostMapping("/logout")
     public Result<Void> logout(@RequestHeader("Authorization") String authorization) {
-        throw new UnsupportedOperationException("待实现");
+        authService.logout(AuthInterceptor.bearerToken(authorization));
+        return Result.success();
     }
 
     /**
@@ -42,6 +44,6 @@ public class AuthController {
      */
     @GetMapping("/validate")
     public Result<Boolean> validate(@RequestHeader("Authorization") String authorization) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(authService.validateToken(AuthInterceptor.bearerToken(authorization)));
     }
 }

@@ -1,6 +1,7 @@
 package com.iam.platform.application.role;
 
 import com.iam.platform.common.enums.ErrorCode;
+import com.iam.platform.common.enums.RoleType;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
@@ -25,6 +26,8 @@ import java.util.List;
 @Service
 public class RoleService {
 
+    public static final String ROLE_ACTIVE = "ACTIVE";
+
     private final IamRoleRepository roleRepository;
     private final IamRoleExclusionRepository exclusionRepository;
 
@@ -33,27 +36,45 @@ public class RoleService {
      */
     @Transactional
     public IamRole createRole(String roleCode, String roleName, String roleType, String description) {
-        throw new UnsupportedOperationException("待实现");
+        RoleType.fromCode(roleType);
+        if (roleRepository.findByRoleCode(roleCode).isPresent()) {
+            throw new BusinessException(ErrorCode.RESOURCE_DUPLICATE, "角色编码已存在: " + roleCode);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        IamRole role = new IamRole();
+        role.setRoleCode(roleCode);
+        role.setRoleName(roleName);
+        role.setRoleType(roleType);
+        role.setDescription(description);
+        role.setStatus(ROLE_ACTIVE);
+        role.setIsDeleted(0);
+        role.setCreatedAt(now);
+        role.setUpdatedAt(now);
+        return roleRepository.save(role);
     }
 
     /**
      * 查询角色详情。
      */
     public IamRole getRole(Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        return roleRepository.findById(roleId)
+                .filter(r -> r.getIsDeleted() == 0)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + roleId));
     }
 
     /**
      * 查询全部角色。
      */
     public List<IamRole> listRoles() {
-        throw new UnsupportedOperationException("待实现");
+        return roleRepository.findAll().stream().filter(r -> r.getIsDeleted() == 0).toList();
     }
 
     /**
      * 配置角色互斥。
      *
      * <p>互斥角色不能同时授予同一用户（如会计与出纳）。
+     * 属于 RBAC2 约束，留待 RBAC3 阶段实现。
      * 对应 FR-14、UC-05。
      */
     @Transactional

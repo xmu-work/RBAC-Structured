@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/roles")
+@RequestMapping("/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
@@ -35,7 +35,7 @@ public class RoleController {
                                   @RequestParam String roleName,
                                   @RequestParam String roleType,
                                   @RequestParam(required = false) String description) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(roleService.createRole(roleCode, roleName, roleType, description));
     }
 
     /**
@@ -43,7 +43,7 @@ public class RoleController {
      */
     @GetMapping("/{roleId}")
     public Result<IamRole> get(@PathVariable Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(roleService.getRole(roleId));
     }
 
     /**
@@ -51,7 +51,7 @@ public class RoleController {
      */
     @GetMapping
     public Result<List<IamRole>> list() {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(roleService.listRoles());
     }
 
     /**
@@ -81,7 +81,7 @@ public class RoleController {
                                      @RequestParam(required = false) LocalDateTime expireTime,
                                      @RequestParam(required = false) Long grantBy,
                                      @RequestParam(required = false) String grantReason) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(grantService.grantRole(userId, roleId, expireTime, grantBy, grantReason));
     }
 
     /**
@@ -89,7 +89,8 @@ public class RoleController {
      */
     @DeleteMapping("/grants")
     public Result<Void> revoke(@RequestParam Long userId, @RequestParam Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        grantService.revokeRole(userId, roleId);
+        return Result.success();
     }
 
     /**
@@ -97,6 +98,6 @@ public class RoleController {
      */
     @GetMapping("/grants/{userId}")
     public Result<List<IamUserRole>> userRoles(@PathVariable Long userId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(grantService.getUserRoles(userId));
     }
 }
