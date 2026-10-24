@@ -37,17 +37,23 @@ function toOptions<T extends string>(
 }
 
 export const useDictStore = defineStore('dict', () => {
-  const accountStatusOptions = toOptions<AccountStatusCode>(AccountStatus, AccountStatusLabel)
-  const roleTypeOptions = toOptions<RoleTypeCode>(RoleType, RoleTypeLabel)
-  const orgTypeOptions = toOptions<OrgTypeCode>(OrgType, OrgTypeLabel)
-  const operationActionOptions = toOptions<OperationActionCode>(
-    OperationAction,
-    OperationActionLabel,
+  // computed 包一层：storeToRefs 只收 ref/computed，普通数组会被跳过导致 useDict 解构为 undefined
+  const accountStatusOptions = computed(() =>
+    toOptions<AccountStatusCode>(AccountStatus, AccountStatusLabel),
   )
-  const dataScopeTypeOptions = toOptions<DataScopeTypeCode>(DataScopeType, DataScopeTypeLabel)
-  const commonStatusOptions = toOptions<CommonStatusCode>(CommonStatus, CommonStatusLabel)
-  const changeTypeOptions = toOptions<ChangeTypeCode>(ChangeType, ChangeTypeLabel)
-  const grantStatusOptions = toOptions<GrantStatusCode>(GrantStatus, GrantStatusLabel)
+  const roleTypeOptions = computed(() => toOptions<RoleTypeCode>(RoleType, RoleTypeLabel))
+  const orgTypeOptions = computed(() => toOptions<OrgTypeCode>(OrgType, OrgTypeLabel))
+  const operationActionOptions = computed(() =>
+    toOptions<OperationActionCode>(OperationAction, OperationActionLabel),
+  )
+  const dataScopeTypeOptions = computed(() =>
+    toOptions<DataScopeTypeCode>(DataScopeType, DataScopeTypeLabel),
+  )
+  const commonStatusOptions = computed(() => toOptions<CommonStatusCode>(CommonStatus, CommonStatusLabel))
+  const changeTypeOptions = computed(() => toOptions<ChangeTypeCode>(ChangeType, ChangeTypeLabel))
+  const grantStatusOptions = computed(() =>
+    toOptions<GrantStatusCode>(GrantStatus, GrantStatusLabel),
+  )
 
   const dataScopes = ref<DataScope[]>([])
   const dataScopesLoading = ref(false)
