@@ -101,9 +101,11 @@ function handleBusinessError(body: Result, silent = false): Promise<never> {
         ElMessage.error(`${message}，请联系管理员`)
       }
       return rejectWith(code, message)
+    case 3001: // 角色互斥冲突：契约 4.6 规定由页面局部弹窗点名冲突角色（UC-05），拦截器不重复 toast
+      return rejectWith(code, message)
     default:
-      // 1001/1002/1003/2007/2008/3001/3003/3004/3005/3007 等：toast 后端 message 原文（契约 9.2-7）
-      // 需自定义展示的场景（3001 互斥详情、表单 1001 回填、3003 还原拖拽）由页面局部 catch 处理
+      // 1001/1002/1003/2007/2008/3003/3004/3005/3007 等：toast 后端 message 原文（契约 9.2-7）
+      // 需自定义展示的场景（表单 1001 回填、3003 还原拖拽）由页面局部 catch 处理
       if (!silent) {
         ElMessage.error(message)
       }

@@ -6,7 +6,8 @@ type QueryParams = Record<string, unknown>
 type PageFetcher<T> = (params: QueryParams) => Promise<PageResult<T>>
 
 export function useTable<T>(fetcher: PageFetcher<T>, initialQuery: QueryParams = {}) {
-  const rows = ref<T[]>([]) as { value: T[] }
+  // 保持 Ref 类型：模板自动解包 :data="rows"，脚本侧 rows.value 均可用
+  const rows = ref<T[]>([])
   const total = ref(0)
   const page = ref(1)
   const size = ref(DEFAULT_PAGE_SIZE)
