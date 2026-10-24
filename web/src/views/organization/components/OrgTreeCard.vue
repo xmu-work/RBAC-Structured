@@ -2,21 +2,12 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { getOrgChildren, getOrgTree, moveOrg } from '@/api/org.api'
+import { moveOrg } from '@/api/org.api'
 import type { BusinessError } from '@/utils/request'
 import { useDict } from '@/composables/useDict'
+import { useOrgLazyLoad, type OrgTreeNode, type TreeNodeLike } from '@/composables/useOrgTree'
 import { OrgType, type OrgTypeCode } from '@/constants/enums'
-import type { Org } from '@/types/org.types'
 import OrgMoveDialog from './OrgMoveDialog.vue'
-
-type OrgTreeNode = Omit<Org, 'children'>
-
-/** el-tree 懒加载/拖拽回调所需的最小节点结构（避免引 element-plus 内部 Node 类型） */
-interface TreeNodeLike {
-  level: number
-  data: Partial<OrgTreeNode>
-  parent?: TreeNodeLike | null
-}
 
 const props = defineProps<{
   reloadSignal: number
@@ -51,47 +42,17 @@ const moveSubmitting = ref(false)
 const moveSource = ref<OrgTreeNode | null>(null)
 const moveTarget = ref<OrgTreeNode | null>(null)
 
-function stripChildren(org: Org): OrgTreeNode {
-  return {
-    id: org.id,
-    parentId: org.parentId,
-    ancestors: org.ancestors,
-    orgCode: org.orgCode,
-    orgName: org.orgName,
-    orgType: org.orgType,
-    orgLevel: org.orgLevel,
-    sortNo: org.sortNo,
-    status: org.status,
-    isDeleted: org.isDeleted,
-    createdAt: org.createdAt,
-    updatedAt: org.updatedAt,
-  }
-}
-
-/** 懒加载：根层走 GET /orgs，其余走 children 端点（契约 8.3） */
-async function loadChildren(
-  node: TreeNodeLike,
-  resolve: (nodes: OrgTreeNode[]) => void,
-): Promise<void> {
-  try {
-    const parentId = node.data.id
-    const isRootLevel = node.level === 0 || parentId === undefined
-    const list = isRootLevel ? await getOrgTree() : await getOrgChildren(parentId)
-    if (isRootLevel) {
-      rootCount.value = list.length
-    }
-    resolve(list.map(stripChildren))
-  } catch (caught) {
-    if (node.level === 0) {
-      rootError.value = caught instanceof Error ? caught.message : '组织树加载失败'
-    }
-    resolve([])
-  } finally {
-    if (node.level === 0) {
-      initializing.value = false
-    }
-  }
-}
+/** 懒加载：根层走 GET /orgs，其余走 children 端点（契约 8.3，共享 composable） */
+const { loadChildren } = useOrgLazyLoad({
+  onRootLoaded: (count) => {
+    rootCount.value = count
+    initializing.value = false
+  },
+  onRootError: (message) => {
+    rootError.value = message
+    initializing.value = false
+  },
+})
 
 function handleNodeClick(data: OrgTreeNode): void {
   emit('select', data.id)

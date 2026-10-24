@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { createOrg } from '@/api/org.api'
 import { useDict } from '@/composables/useDict'
 import { OrgType, OrgTypeLevel, type OrgTypeCode } from '@/constants/enums'
-import type { BusinessError } from '@/utils/request'
+import { toFieldErrors } from '@/utils/formErrors'
 import type { Org } from '@/types/org.types'
 
 const props = defineProps<{ parentOrg: Org | null }>()
@@ -102,32 +102,9 @@ async function submit(): Promise<void> {
     visible.value = false
     emit('success', org)
   } catch (error) {
-    applyServerErrors(error)
+    serverErrors.value = toFieldErrors(error)
   } finally {
     submitting.value = false
-  }
-}
-
-/** 契约 4.6：code=1001 的「字段: 原因; …」分号串回填对应表单项 */
-function applyServerErrors(error: unknown): void {
-  const business = error as BusinessError
-  if (!business || typeof business !== 'object' || business.code !== 1001) {
-    return
-  }
-  const fieldErrors: Record<string, string> = {}
-  for (const part of business.message.split(';')) {
-    const separator = part.indexOf(':')
-    if (separator <= 0) {
-      continue
-    }
-    const field = part.slice(0, separator).trim()
-    const reason = part.slice(separator + 1).trim()
-    if (field && reason) {
-      fieldErrors[field] = reason
-    }
-  }
-  if (Object.keys(fieldErrors).length > 0) {
-    serverErrors.value = fieldErrors
   }
 }
 </script>

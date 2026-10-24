@@ -27,7 +27,7 @@ interface MockOrg {
 
 let nextOrgId = 100
 
-const orgs: MockOrg[] = [
+export const orgs: MockOrg[] = [
   {
     id: 1,
     parentId: null,
@@ -217,6 +217,21 @@ function isDescendantOf(candidateId: number, ancestorId: number): boolean {
     current = findById(current.parentId)
   }
   return false
+}
+
+/** 以 rootId 为根的子树全部组织 ID 集合（含自身），供用户 mock 按组织子树过滤共享 */
+export function subtreeIds(rootId: number): number[] {
+  const result: number[] = []
+  const queue: number[] = [rootId]
+  while (queue.length > 0) {
+    const id = queue.shift() as number
+    if (!findById(id)) {
+      continue
+    }
+    result.push(id)
+    queue.push(...childrenOf(id).map((child) => child.id))
+  }
+  return result
 }
 
 function orgIdFromUrl(url: string, suffix: string): number | null {
