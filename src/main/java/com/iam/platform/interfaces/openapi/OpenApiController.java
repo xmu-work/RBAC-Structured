@@ -19,7 +19,7 @@ import java.util.Set;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/open")
+@RequestMapping("/open")
 @RequiredArgsConstructor
 public class OpenApiController {
 
@@ -32,7 +32,7 @@ public class OpenApiController {
     public Result<Boolean> authorize(@RequestParam Long userId,
                                      @RequestParam String systemCode,
                                      @RequestParam Long functionPointId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(decisionService.hasPermission(userId, systemCode, functionPointId));
     }
 
     /**
@@ -40,7 +40,8 @@ public class OpenApiController {
      */
     @PostMapping("/authorize/batch")
     public Result<PermissionCheckResult> authorizeBatch(@RequestBody BatchCheckRequest request) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(decisionService.checkPermissions(
+                request.getUserId(), request.getSystemCode(), request.getFunctionPointIds()));
     }
 
     /**
@@ -49,7 +50,7 @@ public class OpenApiController {
     @GetMapping("/permissions")
     public Result<Set<Long>> permissions(@RequestParam Long userId,
                                          @RequestParam String systemCode) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(decisionService.getUserFunctionPoints(userId, systemCode));
     }
 
     @Data

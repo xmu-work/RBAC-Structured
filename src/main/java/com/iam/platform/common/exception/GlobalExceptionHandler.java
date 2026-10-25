@@ -55,6 +55,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Result.fail(ErrorCode.PARAM_INVALID, msg));
     }
 
+    /** 枚举取值非法、缺少请求参数/请求头、参数类型不匹配、请求体无法解析，均为客户端错误 */
+    @ExceptionHandler({IllegalArgumentException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.bind.MissingRequestHeaderException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.http.converter.HttpMessageNotReadableException.class})
+    public ResponseEntity<Result<Void>> handleBadRequest(Exception ex) {
+        log.warn("请求参数错误: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(Result.fail(ErrorCode.PARAM_INVALID, ex.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Result<Void>> handleNotFound(Exception ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Result.fail(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleInternal(Exception ex) {
         log.error("服务器内部错误", ex);

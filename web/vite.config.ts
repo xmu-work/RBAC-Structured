@@ -30,9 +30,6 @@ export default defineConfig(({ command, mode }) => {
         [apiBase]: {
           target: 'http://localhost:8080',
           changeOrigin: true,
-          // 契约 4.1 / D1 [待后端]：context-path 与 Controller 映射叠加成双前缀缺陷，
-          // 修复前临时 rewrite 补一层 /api/v1 兜底；后端修复后移除此 rewrite
-          rewrite: (p) => `/api/v1${p}`,
         },
       },
     },

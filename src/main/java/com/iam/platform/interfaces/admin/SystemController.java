@@ -6,6 +6,7 @@ import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamDataScope;
 import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
 import com.iam.platform.infrastructure.persistence.entity.IamModule;
+import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
 import com.iam.platform.infrastructure.persistence.entity.IamSystem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,7 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/systems")
+@RequestMapping("/systems")
 @RequiredArgsConstructor
 public class SystemController {
 
@@ -34,7 +35,7 @@ public class SystemController {
     public Result<IamSystem> register(@RequestParam String systemCode,
                                       @RequestParam String systemName,
                                       @RequestParam(required = false) String description) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(functionPermissionService.registerSystem(systemCode, systemName, description));
     }
 
     /**
@@ -42,7 +43,7 @@ public class SystemController {
      */
     @GetMapping
     public Result<List<IamSystem>> list() {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(functionPermissionService.listSystems());
     }
 
     /**
@@ -53,7 +54,7 @@ public class SystemController {
                                             @RequestParam String moduleCode,
                                             @RequestParam String moduleName,
                                             @RequestParam(required = false) Integer sortNo) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(functionPermissionService.registerModule(systemId, moduleCode, moduleName, sortNo));
     }
 
     /**
@@ -66,7 +67,8 @@ public class SystemController {
                                                           @RequestParam String action,
                                                           @RequestParam(required = false) String apiPath,
                                                           @RequestParam(required = false) String apiMethod) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(functionPermissionService.registerFunctionPoint(
+                moduleId, pointCode, pointName, action, apiPath, apiMethod));
     }
 
     /**
@@ -77,7 +79,26 @@ public class SystemController {
                                           @RequestBody List<Long> functionPointIds,
                                           @RequestParam String allowedAction,
                                           @RequestParam(required = false) Long createdBy) {
-        throw new UnsupportedOperationException("待实现");
+        functionPermissionService.bindRoleFunctions(roleId, functionPointIds, allowedAction, createdBy);
+        return Result.success();
+    }
+
+    /**
+     * 解除角色的功能权限绑定。
+     */
+    @DeleteMapping("/role-functions")
+    public Result<Void> unbindRoleFunctions(@RequestParam Long roleId,
+                                            @RequestBody List<Long> functionPointIds) {
+        functionPermissionService.unbindRoleFunctions(roleId, functionPointIds);
+        return Result.success();
+    }
+
+    /**
+     * 查询角色已绑定的功能权限。
+     */
+    @GetMapping("/role-functions/{roleId}")
+    public Result<List<IamRoleFunction>> roleFunctions(@PathVariable Long roleId) {
+        return Result.success(functionPermissionService.getRoleFunctions(roleId));
     }
 
     /**

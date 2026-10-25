@@ -67,7 +67,7 @@ RBAC-Structured/
 │   │   │   ├── result/              # 统一响应封装
 │   │   │   ├── enums/               # 枚举定义
 │   │   │   └── exception/           # 异常处理
-│   │   ├── application/             # 应用服务层（空壳骨架，待实现）
+│   │   ├── application/             # 应用服务层（RBAC0 已实现，其余待实现）
 │   │   │   ├── auth/                # M01 认证
 │   │   │   ├── account/             # M02 账号
 │   │   │   ├── organization/        # M03 组织
@@ -76,7 +76,7 @@ RBAC-Structured/
 │   │   │   ├── grant/               # M07 授权
 │   │   │   ├── decision/            # M08 策略决策
 │   │   │   └── audit/               # M09 审计
-│   │   ├── interfaces/              # 接口层（空壳骨架，待实现）
+│   │   ├── interfaces/              # 接口层 + 认证鉴权拦截器
 │   │   │   ├── admin/               # 管理端控制器
 │   │   │   └── openapi/             # 开放API控制器
 │   │   └── infrastructure/          # 基础设施层
@@ -88,10 +88,14 @@ RBAC-Structured/
 │   └── resources/
 │       ├── application.yml          # 应用配置
 │       └── db/schema.sql            # 建表脚本
+│       └── db/seed.sql              # RBAC0 初始化数据（admin 账号、ADMIN 系统功能点）
 └── design/                          # 设计文档
 ```
 
-> **注意**：`application/` 和 `interfaces/` 下的 Service 与 Controller 目前为空壳骨架，方法体为 `throw new UnsupportedOperationException("待实现")`，保留方法签名与注解说明，等待业务逻辑实现。
+> **实现进度（RBAC0）**：登录/登出（M01）、账号（M02）、角色（M04，不含互斥/继承）、功能权限（M05）、用户授权（M07）、权限判定（M08）已实现，并有单元测试。
+> 组织机构、数据权限、角色互斥、审计等仍为 `throw new UnsupportedOperationException("待实现")`，留待 RBAC1/RBAC3 阶段。
+>
+> **鉴权规则**：除 `POST /auth/login` 外所有接口需携带 `Authorization: Bearer <token>`；若该 API（Controller 映射模板 + HTTP 方法）已在 `iam_function_point` 中登记为 ADMIN 系统的功能点，还需当前用户拥有该功能点，否则返回 403。
 
 ## 快速开始
 
@@ -105,10 +109,13 @@ RBAC-Structured/
 
 ```bash
 # 1. 创建数据库
-mysql -u root -p -e "CREATE DATABASE iam DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
+mysql -u root -p -e "CREATE DATABASE iam_platform DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
 
 # 2. 执行建表脚本
-mysql -u root -p iam < src/main/resources/db/schema.sql
+mysql -u root -p iam_platform < src/main/resources/db/schema.sql
+
+# 3. 导入初始化数据（默认管理员 admin / Admin@123，上线后请修改）
+mysql -u root -p iam_platform < src/main/resources/db/seed.sql
 ```
 
 ### 配置修改
@@ -129,14 +136,17 @@ jwt:
 ### 构建与运行
 
 ```bash
-# 编译
+# 编译（需 JDK 17 或 21；JDK 23+ 下 Lombok 会编译失败）
 mvn clean compile
+
+# 单元测试 + Jacoco 覆盖率报告（target/site/jacoco/index.html）
+mvn clean test
 
 # 打包
 mvn clean package -DskipTests
 
 # 运行
-java -jar target/iam-platform-1.0.0.jar
+java -jar target/iam-platform-1.0.0-SNAPSHOT.jar
 ```
 
 ### 访问

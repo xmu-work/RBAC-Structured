@@ -24,6 +24,10 @@ public class IamUser {
     @Column(name = "user_no", nullable = false, length = 32)
     private String userNo;
 
+    /** 登录密码 PBKDF2 哈希（格式：盐:哈希），不存明文 */
+    @Column(name = "password_hash", nullable = false, length = 128)
+    private String passwordHash;
+
     /** 加密姓名（密文） */
     @Column(name = "name_enc", nullable = false, length = 512)
     private String nameEnc;

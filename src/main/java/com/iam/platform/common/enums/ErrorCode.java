@@ -18,6 +18,7 @@ public enum ErrorCode {
     PARAM_MISSING(1002, "必填参数缺失", 400),
     PARAM_FORMAT_ERROR(1003, "格式错误", 400),
     IDEMPOTENCY_CONFLICT(1004, "幂等键冲突且请求体不一致", 409),
+    RESOURCE_NOT_FOUND(1005, "资源不存在", 404),
 
     // 2xxx 认证授权
     UNAUTHENTICATED(2001, "未登录或未携带令牌", 401),
@@ -41,6 +42,7 @@ public enum ErrorCode {
     APPROVAL_REQUIRED(3006, "需审批流", 409),
     DATA_SCOPE_EXPIRED(3007, "临时授权已过期", 409),
     LOCK_ACQUIRE_FAILED(3008, "分布式锁获取失败", 409),
+    RESOURCE_DUPLICATE(3009, "资源已存在", 409),
 
     // 4xxx 限流
     RATE_LIMITED(4001, "触发限流", 429),

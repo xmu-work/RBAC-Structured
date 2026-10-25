@@ -44,7 +44,8 @@ public class CryptoComponent {
     public String encrypt(String plaintext) {
         try {
             byte[] iv = new byte[GCM_IV_LENGTH];
-            java.security.SecureRandom.getInstanceStrong().nextBytes(iv);
+            // getInstanceStrong() 在 Linux 服务器上可能因熵不足阻塞，用默认 SecureRandom 即可
+            new java.security.SecureRandom().nextBytes(iv);
 
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             SecretKeySpec keySpec = new SecretKeySpec(padKey(aesKey), "AES");
@@ -102,6 +103,41 @@ public class CryptoComponent {
             return sb.toString();
         } catch (Exception e) {
             throw new IllegalStateException("哈希计算失败", e);
+        }
+    }
+
+    /**
+     * 密码哈希：PBKDF2-HMAC-SHA256，随机盐。
+     *
+     * @return 格式 Base64(盐):Base64(哈希)
+     */
+    public String hashPassword(String password) {
+        byte[] salt = new byte[16];
+        new java.security.SecureRandom().nextBytes(salt);
+        return Base64.getEncoder().encodeToString(salt) + ":"
+                + Base64.getEncoder().encodeToString(pbkdf2(password, salt));
+    }
+
+    /**
+     * 校验密码是否与哈希匹配（常量时间比较）。
+     */
+    public boolean verifyPassword(String password, String stored) {
+        if (password == null || stored == null || !stored.contains(":")) {
+            return false;
+        }
+        String[] parts = stored.split(":", 2);
+        byte[] salt = Base64.getDecoder().decode(parts[0]);
+        byte[] expected = Base64.getDecoder().decode(parts[1]);
+        return MessageDigest.isEqual(expected, pbkdf2(password, salt));
+    }
+
+    private byte[] pbkdf2(String password, byte[] salt) {
+        try {
+            javax.crypto.SecretKeyFactory factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            javax.crypto.spec.PBEKeySpec spec = new javax.crypto.spec.PBEKeySpec(password.toCharArray(), salt, 65536, 256);
+            return factory.generateSecret(spec).getEncoded();
+        } catch (Exception e) {
+            throw new IllegalStateException("密码哈希失败", e);
         }
     }
 

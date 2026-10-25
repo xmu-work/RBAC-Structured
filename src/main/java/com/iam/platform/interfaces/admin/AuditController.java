@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/audit-logs")
+@RequestMapping("/audit-logs")
 @RequiredArgsConstructor
 public class AuditController {
 
