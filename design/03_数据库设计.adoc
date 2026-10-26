@@ -210,8 +210,6 @@ RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` �
 .统一应用软件权限管理系统 ER 图（全部 14 个实体，图中仅列关键字段，完整字段见第 3 章）
 image::ER图.png[ER 图,width=100%]
 
-说明：图中令牌实体标注为 `FK system_id`，实际实现按 `system_code` 关联 `iam_system.system_code`（见 3.12）。
-
 '''
 
 == 3. 逻辑表结构清单
