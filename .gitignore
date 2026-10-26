@@ -98,3 +98,7 @@ application-prod.yml
 *.bak
 *.swp
 *~
+
+# 本地 API 手册网页导出与验证资料，仅提交 Markdown 正文
+/API使用手册/
+/RBAC后端API使用手册.html
