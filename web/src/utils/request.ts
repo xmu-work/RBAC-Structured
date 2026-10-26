@@ -47,7 +47,7 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.headers.set('X-Request-Id', newRequestId())
 
   // Authorization：除 POST /auth/login 外所有请求自动携带 Bearer Token
-  const isLogin = config.url?.endsWith('/auth/login') ?? false
+  const isLogin = isLoginUrl(config.url)
   const token = tokenStorage.getAccessToken()
   if (token && !isLogin) {
     config.headers.set('Authorization', `Bearer ${token}`)
@@ -61,15 +61,26 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-/* ---------------- 响应拦截器：错误矩阵（契约 4.6，逐码对齐 ErrorCode.java） ---------------- */
+/* ---------------- 响应拦截器：错误矩阵（契约 4.5，逐码对齐 ErrorCode.java） ---------------- */
+function isLoginUrl(url?: string): boolean {
+  return url?.endsWith('/auth/login') ?? false
+}
+
 function rejectWith(code: number, message: string): Promise<never> {
   const error: BusinessError = { code, message }
   return Promise.reject(error)
 }
 
-function handleBusinessError(body: Result, silent = false): Promise<never> {
+function handleBusinessError(body: Result, silent = false, isLogin = false): Promise<never> {
   const code = body.code
   const message = body.message || '请求失败'
+  // 登录接口的 2001 表示"账号或密码错误"，不是会话失效：不清会话、不跳转，提示后端原文（契约 4.5）
+  if (isLogin && code === 2001) {
+    if (!silent) {
+      ElMessage.error(message)
+    }
+    return rejectWith(code, message)
+  }
   switch (code) {
     case 2001: // 未登录
     case 2002: // 令牌无效
@@ -104,7 +115,7 @@ function handleBusinessError(body: Result, silent = false): Promise<never> {
     case 3001: // 角色互斥冲突：契约 4.6 规定由页面局部弹窗点名冲突角色（UC-05），拦截器不重复 toast
       return rejectWith(code, message)
     default:
-      // 1001/1002/1003/2007/2008/3003/3004/3005/3007 等：toast 后端 message 原文（契约 9.2-7）
+      // 1001/1002/1003/1005/2007/2008/3003/3004/3005/3007/3009/3010 等：toast 后端 message 原文（契约 9.2-7）
       // 需自定义展示的场景（表单 1001 回填、3003 还原拖拽）由页面局部 catch 处理
       if (!silent) {
         ElMessage.error(message)
@@ -121,14 +132,14 @@ request.interceptors.response.use(
         // 解包：业务代码只见 data（契约 4.4）
         return body.data as never
       }
-      return handleBusinessError(body, response.config.silent)
+      return handleBusinessError(body, response.config.silent, isLoginUrl(response.config.url))
     }
     return response.data
   },
   (error: AxiosError<Result>) => {
     // 后端 GlobalExceptionHandler 保证 HTTP 状态与错误码匹配，body 同走错误矩阵
     if (error.response?.data && typeof error.response.data.code === 'number') {
-      return handleBusinessError(error.response.data, error.config?.silent)
+      return handleBusinessError(error.response.data, error.config?.silent, isLoginUrl(error.config?.url))
     }
     if (error.code === 'ECONNABORTED') {
       if (!error.config?.silent) {
@@ -169,6 +180,11 @@ export function putForm<T>(url: string, params?: object): Promise<T> {
 /** DELETE + query 参数（如 /roles/grants 回收授权） */
 export function deleteForm<T>(url: string, params?: object): Promise<T> {
   return request.delete(url, { params }) as Promise<T>
+}
+
+/** DELETE + JSON Body（如 /systems/role-functions 解绑：roleId 走 query，功能点 ID 数组走 Body） */
+export function deleteJson<T>(url: string, data?: unknown, params?: object): Promise<T> {
+  return request.delete(url, { params, data }) as Promise<T>
 }
 
 export default request

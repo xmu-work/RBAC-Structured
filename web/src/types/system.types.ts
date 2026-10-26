@@ -61,6 +61,16 @@ export interface FunctionPointCreatePayload {
   apiMethod?: string
 }
 
+/** 角色-功能点绑定记录（后端 IamRoleFunction 直出） */
+export interface RoleFunction {
+  id: number
+  roleId: number
+  functionPointId: number
+  allowedAction: OperationActionCode
+  createdAt: string
+  createdBy?: number
+}
+
 export interface RoleFunctionBindPayload {
   roleId: number
   functionPointIds: number[]

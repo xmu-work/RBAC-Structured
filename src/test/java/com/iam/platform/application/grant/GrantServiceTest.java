@@ -90,7 +90,7 @@ class GrantServiceTest {
         when(userRepository.findById(3L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> grantService.grantRole(1L, 2L, null, null, null))
-                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ACCOUNT_DISABLED.getCode()));
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.TARGET_USER_ABNORMAL.getCode()));
         assertThatThrownBy(() -> grantService.grantRole(3L, 2L, null, null, null))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
     }

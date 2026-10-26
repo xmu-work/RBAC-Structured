@@ -1,21 +1,16 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import SidebarMenu from './components/SidebarMenu.vue'
 import AppHeader from './components/AppHeader.vue'
 import AppTabs from './components/AppTabs.vue'
 import ContentBreadcrumb from './components/ContentBreadcrumb.vue'
 import { useAppStore } from '@/stores/app.store'
-import { useDictStore } from '@/stores/dict.store'
 import { usePermissionSync } from '@/composables/usePermissionSync'
 
 const appStore = useAppStore()
-const dictStore = useDictStore()
 
 usePermissionSync()
 
-onMounted(() => {
-  void dictStore.loadDataScopes()
-})
+// 数据范围字典不在框架挂载时加载：后端 RBAC3 阶段才实现，提前加载会每次弹 500（契约第 7 章）；由数据权限页按需加载
 </script>
 
 <template>

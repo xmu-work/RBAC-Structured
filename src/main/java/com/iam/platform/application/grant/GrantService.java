@@ -51,7 +51,7 @@ public class GrantService {
                 .filter(u -> u.getIsDeleted() == 0)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId));
         if (!AccountStatus.NORMAL.getCode().equals(user.getAccountStatus())) {
-            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, "账号非正常状态，不能授权");
+            throw new BusinessException(ErrorCode.TARGET_USER_ABNORMAL, "用户非正常状态，不能授权: " + userId);
         }
 
         IamRole role = roleRepository.findById(roleId)

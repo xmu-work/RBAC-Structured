@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AuditLog } from '@/types/audit.types'
+import { formatDateTime } from '@/utils/time'
 
 /** 审计详情抽屉（契约 8.9）：展示 detail / ip / decisionId；只读不可修改 */
 defineProps<{ log: AuditLog | null }>()
@@ -16,7 +17,7 @@ function dash(value: string | number | null | undefined): string {
     <template v-if="log">
       <el-descriptions :column="1" border>
         <el-descriptions-item label="日志 ID">{{ log.logId }}</el-descriptions-item>
-        <el-descriptions-item label="操作时间">{{ log.operateTime }}</el-descriptions-item>
+        <el-descriptions-item label="操作时间">{{ formatDateTime(log.operateTime) }}</el-descriptions-item>
         <el-descriptions-item label="操作人">{{ dash(log.username) }}（#{{ dash(log.userId) }}）</el-descriptions-item>
         <el-descriptions-item label="操作">{{ log.action }}</el-descriptions-item>
         <el-descriptions-item label="所属系统">{{ dash(log.systemCode) }}</el-descriptions-item>

@@ -47,7 +47,7 @@ async function handleConfirm(): Promise<void> {
   <el-dialog v-model="visible" title="封存用户确认" width="520px">
     <el-descriptions v-if="user" :column="1" border size="small">
       <el-descriptions-item label="用户账号">{{ user.userNo }}</el-descriptions-item>
-      <el-descriptions-item label="姓名（脱敏）">{{ user.displayName }}</el-descriptions-item>
+      <el-descriptions-item label="姓名">{{ user.realName }}</el-descriptions-item>
     </el-descriptions>
 
     <el-alert

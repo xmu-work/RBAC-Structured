@@ -7,7 +7,7 @@ import { toFieldErrors } from '@/utils/formErrors'
 import OrgTreeSelect from '@/views/organization/components/OrgTreeSelect.vue'
 import type { User } from '@/types/user.types'
 
-/** 新建用户（契约 8.4）：phone 前端预校验；成功即由父级刷新列表 */
+/** 新建用户（契约 8.4）：phone、password 选填（填写时前端预校验）；成功即由父级刷新列表 */
 const emit = defineEmits<{ success: [user: User] }>()
 
 const visible = defineModel<boolean>({ default: false })
@@ -19,6 +19,7 @@ const serverErrors = ref<Record<string, string>>({})
 interface UserCreateForm {
   userNo: string
   realName: string
+  password: string
   phone: string
   orgId: number | undefined
   post: string
@@ -27,6 +28,7 @@ interface UserCreateForm {
 const form = reactive<UserCreateForm>({
   userNo: '',
   realName: '',
+  password: '',
   phone: '',
   orgId: undefined,
   post: '',
@@ -38,6 +40,7 @@ watch(visible, (open) => {
   }
   form.userNo = ''
   form.realName = ''
+  form.password = ''
   form.phone = ''
   form.orgId = undefined
   form.post = ''
@@ -60,10 +63,8 @@ const rules: FormRules = {
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
     { max: 30, message: '姓名不超过 30 个字符', trigger: 'blur' },
   ],
-  phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' },
-  ],
+  password: [{ min: 6, max: 64, message: '密码 6-64 位；不填则使用初始密码', trigger: 'blur' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
   orgId: [{ required: true, message: '请选择所属组织', trigger: 'change' }],
   post: [{ max: 30, message: '岗位不超过 30 个字符', trigger: 'blur' }],
 }
@@ -82,11 +83,12 @@ async function submit(): Promise<void> {
     const user = await createUser({
       userNo: form.userNo.trim(),
       realName: form.realName.trim(),
-      phone: form.phone.trim(),
+      password: form.password || undefined,
+      phone: form.phone.trim() || undefined,
       orgId: form.orgId as number,
       post: form.post.trim() || undefined,
     })
-    ElMessage.success(`用户「${user.displayName}」创建成功，初始状态为正常`)
+    ElMessage.success(`用户「${user.realName}」创建成功，初始状态为正常`)
     visible.value = false
     emit('success', user)
   } catch (error) {
@@ -104,9 +106,12 @@ async function submit(): Promise<void> {
         <el-input v-model="form.userNo" maxlength="32" placeholder="如 U1027" />
       </el-form-item>
       <el-form-item label="真实姓名" prop="realName" :error="serverErrors.realName">
-        <el-input v-model="form.realName" maxlength="30" placeholder="录入后由后端脱敏展示" />
+        <el-input v-model="form.realName" maxlength="30" placeholder="加密存储" />
       </el-form-item>
-      <el-form-item label="手机号" prop="phone" :error="serverErrors.phone">
+      <el-form-item label="初始密码（选填）" prop="password" :error="serverErrors.password">
+        <el-input v-model="form.password" type="password" show-password maxlength="64" placeholder="不填则使用系统初始密码" />
+      </el-form-item>
+      <el-form-item label="手机号（选填）" prop="phone" :error="serverErrors.phone">
         <el-input v-model="form.phone" maxlength="11" placeholder="11 位手机号，展示时脱敏" />
       </el-form-item>
       <el-form-item label="所属组织" prop="orgId">

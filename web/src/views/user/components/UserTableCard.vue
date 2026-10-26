@@ -8,6 +8,8 @@ import { useOrgNames } from '@/composables/useOrgTree'
 import { useTable } from '@/composables/useTable'
 import { AccountStatus, type AccountStatusCode } from '@/constants/enums'
 import type { User } from '@/types/user.types'
+import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { formatDateTime } from '@/utils/time'
 
 /**
  * 用户列表卡片（契约 8.4 / 9.2-1 标准骨架）：查询区 + 工具栏 + 表格 + 分页。
@@ -86,7 +88,7 @@ async function changeStatus(user: User, targetStatus: AccountStatusCode, reason?
   try {
     const updated = await changeUserStatus(user.id, { targetStatus, reason })
     ElMessage.success(
-      `用户「${updated.displayName}」状态已变更为「${dictLabel(accountStatusOptions.value, targetStatus)}」`,
+      `用户「${updated.realName}」状态已变更为「${dictLabel(accountStatusOptions.value, targetStatus)}」`,
     )
   } catch {
     // 3004 等错误提示由拦截器统一 toast；此处仅刷新列表同步真实状态
@@ -136,7 +138,7 @@ function rowChanging(row: unknown): boolean {
           <h2 class="user-table-card__title">用户列表</h2>
           <p class="user-table-card__hint">共 {{ total }} 人 · 服务端分页（万人规模，契约 9.2-5）</p>
         </div>
-        <el-button type="primary" :icon="Plus" @click="emit('create')">新建用户</el-button>
+        <el-button v-perm="FP.USER_CREATE" type="primary" :icon="Plus" @click="emit('create')">新建用户</el-button>
       </div>
     </template>
 
@@ -175,7 +177,7 @@ function rowChanging(row: unknown): boolean {
 
     <el-table v-else v-loading="loading" :data="rows" class="user-table-card__table">
       <el-table-column prop="userNo" label="账号" min-width="90" />
-      <el-table-column prop="displayName" label="姓名（脱敏）" min-width="110" />
+      <el-table-column prop="realName" label="姓名" min-width="110" />
       <el-table-column prop="phoneMasked" label="手机号（脱敏）" min-width="130">
         <template #default="{ row }">{{ asUser(row).phoneMasked ?? '—' }}</template>
       </el-table-column>
@@ -193,7 +195,7 @@ function rowChanging(row: unknown): boolean {
         </template>
       </el-table-column>
       <el-table-column label="最近登录" min-width="160">
-        <template #default="{ row }">{{ asUser(row).lastLoginAt ?? '—' }}</template>
+        <template #default="{ row }">{{ formatDateTime(asUser(row).lastLoginAt) }}</template>
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
@@ -206,7 +208,7 @@ function rowChanging(row: unknown): boolean {
             @confirm="disable(row)"
           >
             <template #reference>
-              <el-button link type="warning" :disabled="rowChanging(row)">停用</el-button>
+              <el-button v-perm.disable="FP.USER_STATUS" link type="warning" :disabled="rowChanging(row)">停用</el-button>
             </template>
           </el-popconfirm>
           <el-popconfirm
@@ -217,7 +219,7 @@ function rowChanging(row: unknown): boolean {
             @confirm="enable(row)"
           >
             <template #reference>
-              <el-button link type="success" :disabled="rowChanging(row)">启用</el-button>
+              <el-button v-perm.disable="FP.USER_STATUS" link type="success" :disabled="rowChanging(row)">启用</el-button>
             </template>
           </el-popconfirm>
           <el-popconfirm
@@ -228,12 +230,13 @@ function rowChanging(row: unknown): boolean {
             @confirm="enable(row)"
           >
             <template #reference>
-              <el-button link type="success" :disabled="rowChanging(row)">解锁</el-button>
+              <el-button v-perm.disable="FP.USER_STATUS" link type="success" :disabled="rowChanging(row)">解锁</el-button>
             </template>
           </el-popconfirm>
           <!-- SEALED 走 L2 高危对话框（契约 9.2-2），由页面承接 -->
           <el-button
             v-if="statusOf(row) === AccountStatus.NORMAL"
+            v-perm.disable="FP.USER_STATUS"
             link
             type="danger"
             :disabled="rowChanging(row)"

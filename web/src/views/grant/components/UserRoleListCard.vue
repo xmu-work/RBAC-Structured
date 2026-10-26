@@ -3,8 +3,10 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { listRoles, listUserRoles } from '@/api/role.api'
 import { useDict } from '@/composables/useDict'
-import { GrantStatus } from '@/constants/enums'
+import { GrantStatus, type GrantStatusCode } from '@/constants/enums'
 import type { Role, UserRole } from '@/types/role.types'
+import { formatDateTime } from '@/utils/time'
+import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
 
 /**
  * 用户角色列表卡（契约 8.6）：展示生效/过期/回收状态；临期 7 天徽标提醒；
@@ -29,13 +31,22 @@ const rows = computed(() =>
     ...grant,
     roleName: roleMap.value[grant.roleId]?.roleName ?? `#${grant.roleId}`,
     roleCode: roleMap.value[grant.roleId]?.roleCode ?? '',
+    displayStatus: displayStatus(grant),
     expiringSoon: isExpiringSoon(grant),
   })),
 )
 
+/** 契约 8.6：后端不会把状态写成 EXPIRED，过期与否按 expireTime 判定 */
+function displayStatus(grant: UserRole): GrantStatusCode {
+  if (grant.status === GrantStatus.ACTIVE && grant.expireTime && dayjs(grant.expireTime).isBefore(dayjs())) {
+    return GrantStatus.EXPIRED
+  }
+  return grant.status
+}
+
 /** 契约 8.6：expireTime 临期 7 天徽标（仅生效中的授权） */
 function isExpiringSoon(grant: UserRole): boolean {
-  if (grant.status !== GrantStatus.ACTIVE || !grant.expireTime) {
+  if (displayStatus(grant) !== GrantStatus.ACTIVE || !grant.expireTime) {
     return false
   }
   const days = dayjs(grant.expireTime).diff(dayjs(), 'day')
@@ -111,10 +122,10 @@ function asGrant(row: unknown): UserRole {
       <el-table-column label="状态" min-width="130">
         <template #default="{ row }">
           <el-tag
-            :type="row.status === GrantStatus.ACTIVE ? 'success' : row.status === GrantStatus.EXPIRED ? 'warning' : 'info'"
+            :type="row.displayStatus === GrantStatus.ACTIVE ? 'success' : row.displayStatus === GrantStatus.EXPIRED ? 'warning' : 'info'"
             effect="light"
           >
-            {{ dictLabel(grantStatusOptions, row.status) }}
+            {{ dictLabel(grantStatusOptions, row.displayStatus) }}
           </el-tag>
           <el-tag v-if="row.expiringSoon" type="danger" size="small" effect="plain" class="user-role-card__expiring">
             临期
@@ -122,11 +133,11 @@ function asGrant(row: unknown): UserRole {
         </template>
       </el-table-column>
       <el-table-column label="生效时间" min-width="150">
-        <template #default="{ row }">{{ row.effectiveTime ?? '—' }}</template>
+        <template #default="{ row }">{{ formatDateTime(row.effectiveTime) }}</template>
       </el-table-column>
       <el-table-column label="过期时间" min-width="160">
         <template #default="{ row }">
-          {{ row.expireTime ?? '长期' }}
+          {{ formatDateTime(row.expireTime, '长期') }}
         </template>
       </el-table-column>
       <el-table-column label="授予原因" min-width="180" show-overflow-tooltip>
@@ -136,6 +147,7 @@ function asGrant(row: unknown): UserRole {
         <template #default="{ row }">
           <el-button
             v-if="asGrant(row).status === GrantStatus.ACTIVE"
+            v-perm.disable="FP.GRANT_REVOKE"
             link
             type="danger"
             @click="emit('revoke', asGrant(row))"

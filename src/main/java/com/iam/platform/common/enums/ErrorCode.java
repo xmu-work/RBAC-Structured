@@ -43,6 +43,8 @@ public enum ErrorCode {
     DATA_SCOPE_EXPIRED(3007, "临时授权已过期", 409),
     LOCK_ACQUIRE_FAILED(3008, "分布式锁获取失败", 409),
     RESOURCE_DUPLICATE(3009, "资源已存在", 409),
+    // 操作对象（而非当前登录人）的账号状态不允许该操作；不能用 2005/2006，否则前端会把操作人强制登出
+    TARGET_USER_ABNORMAL(3010, "目标用户非正常状态", 409),
 
     // 4xxx 限流
     RATE_LIMITED(4001, "触发限流", 429),

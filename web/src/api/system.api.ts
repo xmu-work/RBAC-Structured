@@ -1,4 +1,4 @@
-import { get, postForm, postJson } from '@/utils/request'
+import { deleteJson, get, postForm, postJson } from '@/utils/request'
 import type {
   DataScope,
   DataScopeCreatePayload,
@@ -7,6 +7,7 @@ import type {
   Module,
   ModuleCreatePayload,
   RoleDataScopeBindPayload,
+  RoleFunction,
   RoleFunctionBindPayload,
   System,
   SystemCreatePayload,
@@ -35,6 +36,16 @@ export function bindRoleFunctions(payload: RoleFunctionBindPayload): Promise<voi
     allowedAction: payload.allowedAction,
     createdBy: payload.createdBy,
   })
+}
+
+/** 角色已绑定的功能点（回显 / 矩阵雏形） */
+export function getRoleFunctions(roleId: number): Promise<RoleFunction[]> {
+  return get<RoleFunction[]>(`/systems/role-functions/${roleId}`)
+}
+
+/** 解绑：DELETE 带请求体——roleId 走 query，功能点 ID 数组走 JSON Body（契约 4.2）；未绑定的后端忽略 */
+export function unbindRoleFunctions(roleId: number, functionPointIds: number[]): Promise<void> {
+  return deleteJson<void>('/systems/role-functions', functionPointIds, { roleId })
 }
 
 export function listDataScopes(): Promise<DataScope[]> {

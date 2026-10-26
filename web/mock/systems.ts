@@ -62,6 +62,16 @@ interface MockFunctionPoint {
 let nextSystemId = 100
 let nextModuleId = 100
 let nextPointId = 5000
+let nextRoleFunctionId = 1
+
+/** 角色-功能点绑定（与后端 IamRoleFunction 同形；已绑定的跳过，契约 8.7） */
+const roleFunctions: {
+  id: number
+  roleId: number
+  functionPointId: number
+  allowedAction: OperationAction
+  createdAt: string
+}[] = []
 
 const systems: MockSystem[] = [
   sys(1, 'ADMIN', '统一权限平台', '管理后台自身（含组织/用户/角色/授权/审计菜单功能点）', '2025-01-06 09:00:00'),
@@ -366,6 +376,33 @@ export default [
       }
       if (problems.length > 0) {
         return fail(1001, problems.join('; '))
+      }
+      for (const functionPointId of body as number[]) {
+        if (!roleFunctions.some((rf) => rf.roleId === roleId && rf.functionPointId === functionPointId)) {
+          roleFunctions.push({ id: nextRoleFunctionId++, roleId, functionPointId, allowedAction, createdAt: now })
+        }
+      }
+      return ok(null)
+    },
+  },
+  {
+    url: /\/api\/v1\/systems\/role-functions\/\d+$/,
+    method: 'get',
+    response: ({ url }: { url: string }) => {
+      const roleId = Number(url.split('?')[0].split('/').pop())
+      return ok(roleFunctions.filter((rf) => rf.roleId === roleId))
+    },
+  },
+  {
+    url: '/api/v1/systems/role-functions',
+    method: 'delete',
+    response: ({ query, body }: { query: Record<string, string>; body: unknown }) => {
+      const roleId = Number(query.roleId)
+      const ids = Array.isArray(body) ? (body as number[]) : []
+      for (let i = roleFunctions.length - 1; i >= 0; i--) {
+        if (roleFunctions[i].roleId === roleId && ids.includes(roleFunctions[i].functionPointId)) {
+          roleFunctions.splice(i, 1)
+        }
       }
       return ok(null)
     },
