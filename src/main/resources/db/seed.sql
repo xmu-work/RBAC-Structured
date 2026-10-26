@@ -7,6 +7,8 @@
 -- ============================================================
 
 SET NAMES utf8mb4;
+-- 以北京时间写入默认时间字段（MySQL 容器默认 UTC，否则种子数据的 created_at 会比应用写入的早 8 小时）
+SET time_zone = '+08:00';
 
 -- 1. 管理后台自身作为一个接入系统
 INSERT INTO iam_system (id, system_code, system_name, status, description, is_deleted)
@@ -45,7 +47,12 @@ INSERT INTO iam_function_point (id, module_id, point_code, point_name, action, a
 (20014, 2, 'FP_CREATE',          '注册功能点',       'ALL',  '/systems/function-points',    'POST',   'ACTIVE', 0),
 (20015, 2, 'ROLE_FP_BIND',       '绑定角色功能权限', 'ALL',  '/systems/role-functions',     'POST',   'ACTIVE', 0),
 (20016, 2, 'ROLE_FP_UNBIND',     '解绑角色功能权限', 'ALL',  '/systems/role-functions',     'DELETE', 'ACTIVE', 0),
-(20017, 2, 'ROLE_FP_LIST',       '查询角色功能权限', 'VIEW', '/systems/role-functions/{roleId}', 'GET', 'ACTIVE', 0);
+(20017, 2, 'ROLE_FP_LIST',       '查询角色功能权限', 'VIEW', '/systems/role-functions/{roleId}', 'GET', 'ACTIVE', 0),
+(20018, 2, 'ORG_TREE',           '查询组织树',       'VIEW', '/orgs',                       'GET',    'ACTIVE', 0),
+(20019, 2, 'ORG_CREATE',         '新建组织',         'ALL',  '/orgs',                       'POST',   'ACTIVE', 0),
+(20020, 2, 'ORG_GET',            '查询组织详情',     'VIEW', '/orgs/{orgId}',               'GET',    'ACTIVE', 0),
+(20021, 2, 'ORG_CHILDREN',       '查询下级组织',     'VIEW', '/orgs/{orgId}/children',      'GET',    'ACTIVE', 0),
+(20022, 2, 'ORG_MOVE',           '移动组织节点',     'ALL',  '/orgs/{orgId}/move',          'PUT',    'ACTIVE', 0);
 
 -- 4. 超级管理员角色，拥有以上全部功能点
 INSERT INTO iam_role (id, role_code, role_name, role_type, status, description, is_deleted)
@@ -54,7 +61,12 @@ VALUES (1, 'SUPER_ADMIN', '超级管理员', 'FUNC', 'ACTIVE', '拥有管理后�
 INSERT INTO iam_role_function (role_id, function_point_id, allowed_action)
 SELECT 1, id, action FROM iam_function_point WHERE module_id IN (1, 2);
 
--- 5. 管理员账号 admin / Admin@123，授予超级管理员
+-- 5. 组织机构：总公司为根节点（管理员归属 org_id = 1），其下预置信息中心
+INSERT INTO iam_org (id, parent_id, ancestors, org_code, org_name, org_type, org_level, sort_no, status, is_deleted) VALUES
+(1, NULL, '0',   'HQ',      '总公司',   'HQ',   1, 0, 'ACTIVE', 0),
+(2, 1,    '0,1', 'HQ_INFO', '信息中心', 'DEPT', 3, 1, 'ACTIVE', 0);
+
+-- 6. 管理员账号 admin / Admin@123，授予超级管理员
 INSERT INTO iam_user (id, user_no, password_hash, name_enc, name_hash, org_id, account_status, is_deleted)
 VALUES (1, 'admin',
         'tixOSPFdKOrb2MmPToW+Lw==:C6/muNPbyI7jZnvTebxp3+ToGlVmk0/jm6wtw1pD/zg=',

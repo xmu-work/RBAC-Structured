@@ -32,7 +32,7 @@ public class OrgController {
                                  @RequestParam Integer orgLevel,
                                  @RequestParam(required = false) Long parentId,
                                  @RequestParam(required = false) Integer sortNo) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(organizationService.createOrg(orgCode, orgName, orgType, orgLevel, parentId, sortNo));
     }
 
     /**
@@ -40,7 +40,7 @@ public class OrgController {
      */
     @GetMapping("/{orgId}")
     public Result<IamOrg> get(@PathVariable Long orgId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(organizationService.getOrg(orgId));
     }
 
     /**
@@ -48,7 +48,7 @@ public class OrgController {
      */
     @GetMapping
     public Result<List<IamOrg>> tree(@RequestParam(required = false) Long rootId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(organizationService.getOrgTree(rootId));
     }
 
     /**
@@ -56,7 +56,7 @@ public class OrgController {
      */
     @GetMapping("/{orgId}/children")
     public Result<List<IamOrg>> children(@PathVariable Long orgId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(organizationService.getChildren(orgId));
     }
 
     /**
@@ -64,6 +64,6 @@ public class OrgController {
      */
     @PutMapping("/{orgId}/move")
     public Result<IamOrg> move(@PathVariable Long orgId, @RequestParam Long newParentId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(organizationService.moveOrg(orgId, newParentId));
     }
 }

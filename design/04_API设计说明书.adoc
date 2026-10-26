@@ -133,7 +133,7 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 
 | 3002 | ROLE_INHERIT_CYCLE | 409 | 角色继承成环 | RBAC1
 
-| 3003 | ORG_MOVE_INVALID | 409 | 组织节点移动非法 | RBAC3
+| 3003 | ORG_MOVE_INVALID | 409 | 组织节点移动非法（成环或跨级） | 是
 
 | 3004 | USER_ALREADY_SEALED | 409 | 用户已封存，不能再变更状态 | 是
 
@@ -193,7 +193,7 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 | POST / GET | `/roles/{roleId}/exclusions` | 配置 / 查询角色互斥 | RBAC3（待实现）
 | POST / GET | `/systems/data-scopes` | 创建 / 查询数据范围 | RBAC3（待实现）
 | POST | `/systems/role-data-scopes` | 为角色绑定数据范围 | RBAC3（待实现）
-| POST / GET / PUT | `/orgs`、`/orgs/{orgId}`、`/orgs/{orgId}/children`、`/orgs/{orgId}/move` | 组织机构 | RBAC3（待实现）
+| POST / GET / PUT | `/orgs`、`/orgs/{orgId}`、`/orgs/{orgId}/children`、`/orgs/{orgId}/move` | 组织机构（新建、树、详情、下级、移动） | 已实现
 | GET | `/audit-logs` | 审计日志查询 | RBAC3（待实现）
 |===
 
@@ -315,6 +315,25 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 | `GET /systems/role-functions/{roleId}` | — | 角色已绑定的功能点列表 | —
 |===
 
+=== 3.5 组织机构（M03）
+
+[cols="1,2,3,2"]
+|===
+| 接口 | 参数 | 说明 | 错误
+
+| `GET /orgs` | 可选 `rootId` | 不传：返回顶层组织（下级用 children 接口逐层加载）；传：返回该节点及全部下级的扁平列表 | 1005 rootId 不存在
+
+| `GET /orgs/{orgId}` | — | 组织详情 | 1005
+
+| `GET /orgs/{orgId}/children` | — | 直接下级，按排序号排列 | 1005 上级不存在
+
+| `POST /orgs` | `orgCode`、`orgName`、`orgType`（HQ/BRANCH/DEPT/PROJECT）、`orgLevel`（1～4，须与类型对应）；可选 `parentId`、`sortNo` | 新建组织，自动计算祖先路径 `ancestors` | 1001 类型非法 / 层级与类型不符 / 上级层级不高于本节点；1005 上级不存在；3009 编码已存在
+
+| `PUT /orgs/{orgId}/move` | `newParentId` | 移动到新上级下，同步更新全部下级的祖先路径 | 1005；3003 移动到自身或下级（成环）、新上级层级不高于本节点（跨级）
+|===
+
+组织的修改、停用、删除与人数统计尚未提供接口（RBAC3 阶段）。
+
 == 4 开放鉴权接口（已实现）
 
 供业务系统和前端调用，同样需要 `Authorization` 头。判定规则见《详细设计说明书》6.6 节。
@@ -345,10 +364,6 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 | `POST /systems/data-scopes` | `scopeCode`、`scopeName`；可选 `description`、`sortNo` | FR-22
 | `GET /systems/data-scopes` | — | FR-22
 | `POST /systems/role-data-scopes` | `roleId`、`scopeType`；可选 `orgId`、`projectId`、`createdBy` | FR-22、FR-23
-| `POST /orgs` | `orgCode`、`orgName`、`orgType`、`orgLevel`；可选 `parentId`、`sortNo` | FR-08
-| `GET /orgs` | 可选 `rootId` | FR-08
-| `GET /orgs/{orgId}`、`GET /orgs/{orgId}/children` | — | FR-08
-| `PUT /orgs/{orgId}/move` | `newParentId` | FR-09
 | `GET /audit-logs` | 可选 `page`、`size`、`userId`、`systemCode`、`startTime`、`endTime` | FR-45
 |===
 
