@@ -144,7 +144,6 @@ function dash(value: string | number | null | undefined): string {
           {{ formatDateTime(detail.updatedAt) }}
         </el-descriptions-item>
       </el-descriptions>
-      <p class="org-detail-card__time-hint">时间为后端原始格式 yyyy-MM-dd HH:mm:ss，原样直显</p>
     </template>
   </el-card>
 </template>
@@ -174,9 +173,4 @@ function dash(value: string | number | null | undefined): string {
   font-size: var(--font-size-sm);
 }
 
-.org-detail-card__time-hint {
-  margin: var(--space-4) var(--space-0) var(--space-0);
-  color: var(--color-text-placeholder);
-  font-size: var(--font-size-xs);
-}
 </style>

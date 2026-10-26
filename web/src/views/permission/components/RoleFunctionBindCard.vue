@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link } from '@element-plus/icons-vue'
 import { listRoles } from '@/api/role.api'
-import { bindRoleFunctions } from '@/api/system.api'
+import { bindRoleFunctions, getRoleFunctions, unbindRoleFunctions } from '@/api/system.api'
 import { useAuthStore } from '@/stores/auth.store'
 import { useDict } from '@/composables/useDict'
 import { toFieldErrors } from '@/utils/formErrors'
 import type { Role } from '@/types/role.types'
+import type { RoleFunction } from '@/types/system.types'
+import { ADMIN_API_FUNCTION_POINTS } from '@/constants/permissions'
 
 /**
  * 角色-功能绑定卡片（契约 8.7 权限矩阵雏形）：混合传参（roleId/allowedAction 走 query，
- * functionPointIds 走 JSON Body）；[待后端] 矩阵查询与已有绑定查询端点，v1 仅绑定表单。
+ * functionPointIds 走 JSON Body）；选中角色后展示已绑定功能点，可逐个解绑。矩阵视图仍待后端补齐。
  */
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
@@ -22,6 +24,8 @@ const authStore = useAuthStore()
 const { operationActionOptions } = useDict()
 
 const roles = ref<Role[]>([])
+const bound = ref<RoleFunction[]>([])
+const boundLoading = ref(false)
 
 const form = reactive<{ roleId: number | undefined; allowedAction: string; pointIdsText: string }>({
   roleId: undefined,
@@ -34,6 +38,43 @@ onMounted(() => {
     roles.value = list
   })
 })
+
+async function loadBound(): Promise<void> {
+  if (form.roleId === undefined) {
+    bound.value = []
+    return
+  }
+  boundLoading.value = true
+  try {
+    bound.value = await getRoleFunctions(form.roleId)
+  } catch {
+    bound.value = []
+  } finally {
+    boundLoading.value = false
+  }
+}
+
+watch(() => form.roleId, () => void loadBound())
+
+/** 解绑属回收授权，按 L2 高危确认（契约 9.2-2） */
+async function unbind(item: RoleFunction): Promise<void> {
+  if (form.roleId === undefined) {
+    return
+  }
+  const confirmed = await ElMessageBox.confirm(
+    `解绑后，拥有该角色的用户将立即失去功能点 ${item.functionPointId} 的权限。`,
+    '解绑功能点',
+    { type: 'warning', confirmButtonText: '解绑', cancelButtonText: '取消' },
+  )
+    .then(() => true)
+    .catch(() => false)
+  if (!confirmed) {
+    return
+  }
+  await unbindRoleFunctions(form.roleId, [item.functionPointId])
+  ElMessage.success(`已解绑功能点 ${item.functionPointId}`)
+  await loadBound()
+}
 
 /** 逗号/空格/换行分隔的功能点 ID 文本 → 数字数组（非法项报表单错误） */
 function parsePointIds(text: string): number[] | null {
@@ -94,6 +135,7 @@ async function submit(): Promise<void> {
     ElMessage.success(`已为角色绑定 ${functionPointIds.length} 个功能点（操作：${form.allowedAction}）`)
     form.pointIdsText = ''
     formRef.value?.clearValidate()
+    await loadBound()
   } catch (error) {
     serverErrors.value = toFieldErrors(error)
   } finally {
@@ -109,7 +151,7 @@ async function submit(): Promise<void> {
       <div>
         <h2 class="role-bind-card__title">角色-功能绑定</h2>
         <p class="role-bind-card__hint">
-          权限矩阵雏形：矩阵视图与"角色已有功能"查询端点待后端补齐，v1 仅提供绑定表单
+          选中角色后显示其已绑定的功能点，可逐个解绑；矩阵视图待后端补齐
         </p>
       </div>
     </template>
@@ -124,6 +166,21 @@ async function submit(): Promise<void> {
             :value="role.id"
           />
         </el-select>
+      </el-form-item>
+      <el-form-item v-if="form.roleId !== undefined" label="已绑定功能点">
+        <div v-loading="boundLoading" class="role-bind-card__bound">
+          <el-tag
+            v-for="item in bound"
+            :key="item.id"
+            v-perm:disable="ADMIN_API_FUNCTION_POINTS.ROLE_FP_UNBIND"
+            closable
+            effect="plain"
+            @close="unbind(item)"
+          >
+            {{ item.functionPointId }}（{{ item.allowedAction }}）
+          </el-tag>
+          <span v-if="!boundLoading && bound.length === 0" class="role-bind-card__empty">尚未绑定功能点</span>
+        </div>
       </el-form-item>
       <el-form-item label="操作类型" prop="allowedAction">
         <el-select v-model="form.allowedAction" filterable placeholder="12 取值之一" style="width: 100%">
@@ -160,6 +217,18 @@ async function submit(): Promise<void> {
   margin: var(--space-0);
   color: var(--color-text-primary);
   font-size: var(--font-size-lg);
+}
+
+.role-bind-card__bound {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: var(--space-6);
+}
+
+.role-bind-card__empty {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .role-bind-card__hint {

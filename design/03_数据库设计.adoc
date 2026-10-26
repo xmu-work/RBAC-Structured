@@ -119,7 +119,9 @@
 
 | RBAC1（角色继承） | `iam_role.parent_id`（字段与索引已建） | 功能待实现
 
-| RBAC3（约束 + 数据权限 + 审计） | `iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope`、`iam_audit_log`、`iam_permission_change_log` | 表已建，功能待实现
+| RBAC0 补充 | `iam_org` | 表已建；树查询、新建、移动已实现，修改、停用在 RBAC3 阶段
+
+| RBAC3（约束 + 数据权限 + 审计） | `iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope`、`iam_audit_log`、`iam_permission_change_log` | 表已建，功能待实现
 |===
 
 RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` ↔ `iam_user_role` ↔ `iam_role` ↔ `iam_role_function` ↔ `iam_function_point`。`iam_system → iam_module → iam_function_point` 用于把功能点归属到接入系统，`iam_token` 记录登录令牌以支持登出与吊销。
@@ -218,7 +220,7 @@ image::ER图.png[ER 图,width=100%]
 
 == 3. 逻辑表结构清单
 
-=== 3.1 iam_org 组织机构（RBAC3 阶段实现）
+=== 3.1 iam_org 组织机构（已实现：树查询、新建、移动）
 
 [cols="1,1,1,1,1"]
 |===
@@ -710,7 +712,7 @@ RBAC0 鉴权每次实时查库、不使用缓存（见《详细设计说明书�
 
 | iam_token | `uk_token_hash(token_hash)`、`idx_token_user_status(user_id, status)` | 每个请求按令牌哈希认证；账号停用/封存时吊销该用户全部有效令牌
 
-| iam_org（RBAC3） | `idx_org_parent(parent_id)`、`idx_org_ancestors(ancestors)` | 组织树、子树查询
+| iam_org | `idx_org_parent(parent_id)`、`idx_org_ancestors(ancestors)` | 查询下级组织（按上级）；子树查询（按祖先路径前缀）
 
 | iam_audit_log（RBAC3） | `idx_log_time(operate_time)`、`idx_log_user(user_id)` | 日志查询（FR-45）
 
@@ -975,11 +977,13 @@ CREATE TABLE IF NOT EXISTS iam_permission_change_log (
 
 | iam_module | 2 条：`MENU` 菜单、`API` 管理端接口 |
 
-| iam_function_point | 8 个菜单功能点（ID 10001～10008）+ 17 个 API 功能点（ID 20001～20017） | 菜单功能点 ID 与前端 `web/src/constants/permissions.ts` 一致；API 功能点登记 `api_path` + `api_method`，如 `GET /users`、`PUT /users/{userId}/status`
+| iam_function_point | 8 个菜单功能点（ID 10001～10008）+ 22 个 API 功能点（ID 20001～20022，含 5 个组织接口） | 菜单功能点 ID 与前端 `web/src/constants/permissions.ts` 一致；API 功能点登记 `api_path` + `api_method`，如 `GET /users`、`PUT /users/{userId}/status`
 
 | iam_role | 1 条：`SUPER_ADMIN` 超级管理员 |
 
-| iam_role_function | 25 条 | 超级管理员绑定以上全部功能点
+| iam_role_function | 30 条 | 超级管理员绑定以上全部功能点
+
+| iam_org | 2 条：`HQ` 总公司（根，ID 1）、`HQ_INFO` 信息中心（部门，ID 2） | 管理员归属总公司；9 个分公司等基线组织见 6.2.3
 
 | iam_user | 1 条：`admin`，初始密码 `Admin@123` | 上线前必须修改；姓名密文依赖 `crypto.aes-key`，修改密钥后需重新生成
 
@@ -1099,7 +1103,7 @@ CREATE TABLE IF NOT EXISTS iam_permission_change_log (
 
 | FR-07 绑定关系查询 | `iam_user_role`、`iam_role_function`（索引见 4.5） | — | 部分实现
 
-| FR-08～FR-11 组织树 | `iam_org`：`parent_id` 自关联、`ancestors` 祖先路径、`org_type`/`org_level`；人数统计按 `iam_user.org_id` 聚合 | — | RBAC3 阶段
+| FR-08～FR-11 组织树 | `iam_org`：`parent_id` 自关联、`ancestors` 祖先路径、`org_type`/`org_level`；人数统计按 `iam_user.org_id` 聚合 | — | 部分实现（树查询、新建、移动已实现）
 
 | FR-12 角色定义 | `iam_role`：`role_code` 唯一、`role_type`、`status` | — | 已实现
 

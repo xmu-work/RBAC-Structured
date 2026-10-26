@@ -115,6 +115,8 @@ mysql -u root -p iam_platform < src/main/resources/db/schema.sql
 mysql -u root -p iam_platform < src/main/resources/db/seed.sql
 ```
 
+> **时区**：应用按北京时间（Asia/Shanghai）写入时间字段。服务器上的 MySQL 建议设置 `default-time-zone = '+08:00'`（Docker 可加 `-e TZ=Asia/Shanghai`），否则由数据库默认值生成的时间会比应用写入的早 8 小时；`seed.sql` 已在会话级设置 `time_zone = '+08:00'`。
+
 ### 配置修改
 
 编辑 `src/main/resources/application.yml`，修改数据库连接信息与 JWT 密钥：

@@ -233,6 +233,28 @@ class ApiControllerTest {
         verify(functionPermissionService).unbindRoleFunctions(2L, List.of(10L));
     }
 
+    // ---------- 组织机构 ----------
+
+    @Test
+    void organizationEndpoints() throws Exception {
+        IamOrg hq = new IamOrg();
+        hq.setOrgCode("HQ1");
+        when(organizationService.getOrgTree(null)).thenReturn(List.of(hq));
+        when(organizationService.getChildren(1L)).thenReturn(List.of());
+        when(organizationService.getOrg(1L)).thenReturn(hq);
+        when(organizationService.createOrg("BR1", "分公司", "BRANCH", 2, 1L, null)).thenReturn(new IamOrg());
+        when(organizationService.moveOrg(3L, 12L)).thenReturn(new IamOrg());
+
+        mvc.perform(get("/orgs").header("Authorization", AUTH)).andExpect(jsonPath("$.data[0].orgCode").value("HQ1"));
+        mvc.perform(get("/orgs/1/children").header("Authorization", AUTH)).andExpect(status().isOk());
+        mvc.perform(get("/orgs/1").header("Authorization", AUTH)).andExpect(jsonPath("$.data.orgCode").value("HQ1"));
+        mvc.perform(post("/orgs").header("Authorization", AUTH).param("orgCode", "BR1").param("orgName", "分公司")
+                        .param("orgType", "BRANCH").param("orgLevel", "2").param("parentId", "1"))
+                .andExpect(status().isOk());
+        mvc.perform(put("/orgs/3/move").header("Authorization", AUTH).param("newParentId", "12"))
+                .andExpect(status().isOk());
+    }
+
     // ---------- 开放鉴权接口 ----------
 
     @Test

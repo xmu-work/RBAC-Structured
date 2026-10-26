@@ -131,7 +131,7 @@ com.iam.platform
 │   ├── permission    M05 功能权限：FunctionPermissionService（M06 DataPermissionService 待实现）
 │   ├── grant         M07 授权管理：GrantService
 │   ├── decision      M08 鉴权决策：DecisionService
-│   ├── organization  M03 组织机构（待实现）
+│   ├── organization  M03 组织机构：OrganizationService
 │   └── audit         M09 审计日志（待实现）
 ├── infrastructure    基础设施层
 │   ├── persistence   JPA 实体（14 个）与 Repository
@@ -371,7 +371,7 @@ P3 是典型的*变换型*数据流：
 
 | M02 | 用户与账号管理 | 账号建立、状态管理（正常/停用/封存/锁定）、账号查询；（扩展）批量导入 | M01（吊销令牌）、M07（回收角色）、M11 | `AccountService`；已实现
 
-| M03 | 组织机构管理 | 多级组织树、节点移动、组织-数据范围映射 | 无 | `OrganizationService`；RBAC3 阶段
+| M03 | 组织机构管理 | 多级组织树、节点移动、组织-数据范围映射 | 无 | `OrganizationService`；部分实现（树查询、新建、移动已实现；修改、停用、数据范围映射在 RBAC3 阶段）
 
 | M04 | 角色管理 | 角色定义；继承（RBAC1）；互斥（RBAC3） | 无 | `RoleService`；部分实现
 
@@ -719,6 +719,31 @@ image::模块结构图_RBAC0.png[RBAC0 模块结构图,width=100%]
 * 参数缺失、类型错误、枚举取值非法、请求体无法解析 → 400；未知路径 → 404；其他未预期异常 → 500 并记录错误日志。
 * 错误码表见《API 设计说明书》1.4 节。
 
+=== 6.9 M03 组织机构管理（OrganizationService）
+
+*职责*：维护总公司→分公司→部门→项目经理部四级组织树。新建账号必须选择所属组织，数据权限（RBAC3）也以组织树为判定依据。
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `createOrg(orgCode, orgName, orgType, orgLevel, parentId, sortNo)` | 编码、名称、类型（HQ/BRANCH/DEPT/PROJECT）、层级、［上级、排序］ | 组织实体 | FR-08、FR-09
+
+| `getOrgTree(rootId)` | ［根节点 ID］ | 不传：顶层节点；传：该节点及全部下级的扁平列表 | FR-08
+
+| `getChildren(parentId)` | 上级 ID | 直接下级列表 | FR-08
+
+| `getOrg(orgId)` | 组织 ID | 组织实体 | FR-08
+
+| `moveOrg(orgId, newParentId)` | 组织 ID、新上级 ID | 组织实体 | FR-09
+|===
+
+*祖先路径*：`ancestors` 存"0,根ID,…,父ID"，根节点为 `0`。子树查询按"本节点路径"前缀匹配，并要求路径等于前缀或以"前缀,"开头，避免 `0,1` 误匹配 `0,12`。
+
+*处理流程：createOrg*：类型合法（否则 400）且层级与类型一致（HQ=1 … PROJECT=4，否则 `PARAM_INVALID`）→ 编码查重（`RESOURCE_DUPLICATE`）→ 有上级时上级必须存在（`RESOURCE_NOT_FOUND`）且层级更高（`PARAM_INVALID`）→ 祖先路径 = 上级路径 + 上级 ID → 写入 D2。
+
+*处理流程：moveOrg*：节点与新上级都存在 → 新上级不能是自己或自己的下级（成环，`ORG_MOVE_INVALID`）→ 新上级层级必须更高（跨级，`ORG_MOVE_INVALID`）→ 更新本节点的上级与祖先路径 → 把全部下级祖先路径中的旧前缀替换为新前缀，在同一事务中保存。
+
 == 7 关键处理流程
 
 === 7.1 一次管理端请求的处理顺序
@@ -822,6 +847,8 @@ RBAC0 实现第 ①②③ 步；③′ 与 ④ 在 RBAC3 阶段加入，届时�
 | FR-33、FR-39 鉴权与权限查询 | M08 | `DecisionService` | `GET /open/authorize`、`POST /open/authorize/batch`、`GET /open/permissions` | 只读
 
 | FR-37 后端 API 鉴权 | M01、M08 | `AuthInterceptor` | 全部接口（登录除外） | `iam_token`、`iam_function_point` 等
+
+| FR-08、FR-09 组织树 | M03 | `OrganizationService` | `GET /orgs`、`GET /orgs/{orgId}`、`GET /orgs/{orgId}/children`、`POST /orgs`、`PUT /orgs/{orgId}/move` | `iam_org`
 
 | FR-48、FR-49 加密与脱敏 | M11、M02 | `CryptoComponent`、`AccountService.toView` | 用户相关接口 | `iam_user`
 |===
