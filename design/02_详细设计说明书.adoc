@@ -658,7 +658,7 @@ image::模块结构图_RBAC0.png[RBAC0 模块结构图,width=100%]
 
 *处理流程：grantRole*
 
-. 用户存在且未删除（`RESOURCE_NOT_FOUND`），状态为 `NORMAL`（否则 `ACCOUNT_DISABLED`）。
+. 用户存在且未删除（`RESOURCE_NOT_FOUND`），状态为 `NORMAL`（否则 `TARGET_USER_ABNORMAL`，3010。这里校验的是被授权的用户，不能用 2006，否则前端会把操作人登出）。
 . 角色存在且未删除（`RESOURCE_NOT_FOUND`），状态为 `ACTIVE`（否则 `PARAM_INVALID`）。
 . 失效时间不为空时必须晚于当前时间（`PARAM_INVALID`）。
 . 查该用户与该角色的绑定：已是 `ACTIVE` → `GRANT_DUPLICATE`；已回收 → 复用原记录；没有 → 新建。

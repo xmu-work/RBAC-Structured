@@ -168,6 +168,17 @@ class ApiControllerTest {
         mvc.perform(get("/users/abc").header("Authorization", AUTH)).andExpect(status().isBadRequest());
     }
 
+    @Test
+    void grantingAbnormalUserIsConflictNotForbidden() throws Exception {
+        // 目标用户状态异常不能返回 2005/2006（403），否则前端会把操作人强制登出
+        when(grantService.grantRole(eq(5L), eq(2L), isNull(), isNull(), isNull()))
+                .thenThrow(new BusinessException(ErrorCode.TARGET_USER_ABNORMAL));
+
+        mvc.perform(post("/roles/grants").header("Authorization", AUTH).param("userId", "5").param("roleId", "2"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(3010));
+    }
+
     // ---------- 角色与授权 ----------
 
     @Test
