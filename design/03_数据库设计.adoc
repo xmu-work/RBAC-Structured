@@ -12,7 +12,7 @@
 
 | 文档版本 | V1.2
 
-| 修订说明 | V1.2（2026-10-26）：按需求文档 V1.1 整理——第 1 章约定改为与实际表结构一致，后续阶段的设计标注实现阶段，新增第 7 章需求追踪。V1.1（2026-10-26）：RBAC0 相关 8 张表与建表脚本 `src/main/resources/db/schema.sql`、JPA 实体逐字段对齐；新增 `password_hash`；第 5 章 DDL 改为实际建表脚本；新增初始化数据说明；嵌入 ER 图
+| 修订说明 | V1.2（2026-10-26）：按需求文档 V1.1 整理——第 1 章约定改为与实际表结构一致，后续阶段的设计标注实现阶段，新增第 7 章需求追踪；`schema.sql` 补齐其余 6 张表，第 5 章改为完整 14 张表。V1.1（2026-10-26）：RBAC0 相关 8 张表与建表脚本 `src/main/resources/db/schema.sql`、JPA 实体逐字段对齐；新增 `password_hash`；第 5 章 DDL 改为实际建表脚本；新增初始化数据说明；嵌入 ER 图
 
 | 编制单位 | 信息中心 / 系统架构组
 
@@ -49,7 +49,7 @@
 
 | 外键约束 | 逻辑外键，不建物理约束（见 4.2） | `iam_user.org_id → iam_org.id`
 
-| 布尔字段 | `is_` 前缀或语义名，`tinyint`，0/1 | `is_deleted`、`revoked`
+| 布尔字段 | `is_` 前缀或语义名，`tinyint`，0/1；JPA 实体以 `Integer` 映射并声明 `columnDefinition = "tinyint"`，保证结构校验通过 | `is_deleted`、`revoked`
 |===
 
 === 1.2 字符集与排序规则
@@ -109,17 +109,17 @@
 
 === 1.6 实现阶段与表范围
 
-课程设计分三次检查逐步实现 RBAC0 → RBAC1 → RBAC3。本文档第 3 章给出全部 14 张表的目标设计，其中 **RBAC0 阶段已实现 8 张表**，与建表脚本 `schema.sql`、JPA 实体完全一致，并已在 MySQL 8.0 上导入验证。
+课程设计分三次检查逐步实现 RBAC0 → RBAC1 → RBAC3。本文档第 3 章给出全部 14 张表的设计。*14 张表的结构都已写入建表脚本 `schema.sql`*，与第 3 章、JPA 实体逐字段一致，并在 MySQL 8.0 上以 Hibernate `ddl-auto=validate` 校验通过；其中 RBAC0 阶段的业务代码使用 8 张表，其余 6 张表已建好、对应功能在后续阶段实现。
 
 [cols="1,2,1"]
 |===
 | 阶段 | 表 | 状态
 
-| RBAC0（第一次检查） | `iam_user`、`iam_role`、`iam_user_role`、`iam_system`、`iam_module`、`iam_function_point`、`iam_role_function`、`iam_token` | 已实现
+| RBAC0（第一次检查） | `iam_user`、`iam_role`、`iam_user_role`、`iam_system`、`iam_module`、`iam_function_point`、`iam_role_function`、`iam_token` | 表与功能均已实现
 
-| RBAC1（角色继承） | `iam_role.parent_id`（字段已预留） | 待实现
+| RBAC1（角色继承） | `iam_role.parent_id`（字段与索引已建） | 功能待实现
 
-| RBAC3（约束 + 数据权限 + 审计） | `iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope`、`iam_audit_log`、`iam_permission_change_log` | 待实现，实现时同步更新 `schema.sql`
+| RBAC3（约束 + 数据权限 + 审计） | `iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope`、`iam_audit_log`、`iam_permission_change_log` | 表已建，功能待实现
 |===
 
 RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` ↔ `iam_user_role` ↔ `iam_role` ↔ `iam_role_function` ↔ `iam_function_point`。`iam_system → iam_module → iam_function_point` 用于把功能点归属到接入系统，`iam_token` 记录登录令牌以支持登出与吊销。
@@ -655,7 +655,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 | iam_token | `uk_token_hash(token_hash)` | 令牌哈希唯一
 |===
 
-说明：`iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope` 的约束属于后续阶段，实现时加入 `schema.sql`。
+说明：以上唯一约束均已写入 `schema.sql`。注意 `uk_role_scope` 含可空列 `org_id`、`project_id`，MySQL 唯一索引不把 NULL 视为重复，"全公司 / 本人"这类不带组织的授权需在应用层查重（RBAC3 实现时处理）。
 
 === 4.2 外键策略
 
@@ -713,13 +713,15 @@ RBAC0 鉴权每次实时查库、不使用缓存（见《详细设计说明书�
 | iam_org（RBAC3） | `idx_org_parent(parent_id)`、`idx_org_ancestors(ancestors)` | 组织树、子树查询
 
 | iam_audit_log（RBAC3） | `idx_log_time(operate_time)`、`idx_log_user(user_id)` | 日志查询（FR-45）
+
+| iam_permission_change_log（RBAC3） | `idx_pcl_user(user_id)`、`idx_pcl_time(changed_at)` | 按用户、按时间追溯变更（FR-42）
 |===
 
 '''
 
 == 5. MySQL 8.0 建表 DDL
 
-完整建表脚本为仓库中的 `src/main/resources/db/schema.sql`，以下摘录 RBAC0 阶段已实现的 8 张表，与脚本内容一致。其余 6 张表按第 3 章的目标设计在后续阶段补充。
+完整建表脚本为仓库中的 `src/main/resources/db/schema.sql`，以下为脚本中全部 14 张表的建表语句，与脚本内容一致。
 
 导入方式：
 
@@ -864,6 +866,97 @@ CREATE TABLE IF NOT EXISTS iam_token (
     UNIQUE KEY uk_token_hash (token_hash),
     KEY idx_token_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
+
+CREATE TABLE IF NOT EXISTS iam_org (
+    id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    parent_id      BIGINT        NULL     COMMENT '上级组织；根节点为 NULL',
+    ancestors      VARCHAR(500)  NOT NULL DEFAULT '0' COMMENT '祖先路径，逗号分隔 ID，如 0,1,12，便于子树查询',
+    org_code       VARCHAR(64)   NOT NULL COMMENT '组织编码',
+    org_name       VARCHAR(128)  NOT NULL COMMENT '组织名称',
+    org_type       VARCHAR(16)   NOT NULL COMMENT '类型：HQ 总公司 / BRANCH 分公司 / DEPT 部门 / PROJECT 项目部',
+    org_level      TINYINT       NOT NULL COMMENT '层级：1 总公司 / 2 分公司 / 3 部门 / 4 项目部',
+    leader_user_id BIGINT        NULL     COMMENT '负责人',
+    sort_no        INT           NOT NULL DEFAULT 0 COMMENT '同级排序',
+    status         VARCHAR(16)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE 正常 / DISABLED 停用',
+    is_deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '软删除标记',
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    created_by     BIGINT        NULL     COMMENT '创建人',
+    updated_by     BIGINT        NULL     COMMENT '更新人',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_org_code (org_code),
+    KEY idx_org_parent (parent_id),
+    KEY idx_org_ancestors (ancestors)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构';
+
+CREATE TABLE IF NOT EXISTS iam_role_exclusion (
+    id               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    role_id          BIGINT        NOT NULL COMMENT '角色 A',
+    excluded_role_id BIGINT        NOT NULL COMMENT '互斥角色 B',
+    description      VARCHAR(255)  NULL     COMMENT '互斥原因（如会计与出纳）',
+    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    created_by       BIGINT        NULL     COMMENT '创建人',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_role_excl (role_id, excluded_role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色互斥（双向落库）';
+
+CREATE TABLE IF NOT EXISTS iam_data_scope (
+    id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    scope_code  VARCHAR(32)   NOT NULL COMMENT '编码：ALL / BRANCH / DEPT / PROJECT / SELF',
+    scope_name  VARCHAR(64)   NOT NULL COMMENT '名称：全公司/本分公司/本部门/本项目/本人',
+    description VARCHAR(255)  NULL     COMMENT '说明',
+    sort_no     INT           NOT NULL DEFAULT 0 COMMENT '排序',
+    status      VARCHAR(16)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE / DISABLED',
+    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_scope_code (scope_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据范围字典';
+
+CREATE TABLE IF NOT EXISTS iam_role_data_scope (
+    id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    role_id        BIGINT        NOT NULL COMMENT '角色',
+    scope_type     VARCHAR(32)   NOT NULL COMMENT '数据范围类型',
+    org_id         BIGINT        NULL     COMMENT '绑定组织（本分公司/本部门时使用）',
+    project_id     BIGINT        NULL     COMMENT '绑定项目（本项目时使用，指向 org_type=PROJECT 节点）',
+    effective_time DATETIME      NULL     COMMENT '生效时间（临时授权）',
+    expire_time    DATETIME      NULL     COMMENT '失效时间',
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    created_by     BIGINT        NULL     COMMENT '授权人',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_role_scope (role_id, scope_type, org_id, project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-数据范围授权';
+
+CREATE TABLE IF NOT EXISTS iam_audit_log (
+    log_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键，自增',
+    user_id      BIGINT        NULL     COMMENT '操作人 ID（系统事件可空）',
+    username     VARCHAR(128)  NULL     COMMENT '操作人用户名快照（脱敏后）',
+    action       VARCHAR(128)  NOT NULL COMMENT '操作内容/动作',
+    operate_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    success      TINYINT       NOT NULL COMMENT '操作成功与否（1 成功 / 0 失败）',
+    target       VARCHAR(255)  NULL     COMMENT '操作对象（如角色 ID、功能点 ID）',
+    ip           VARCHAR(64)   NULL     COMMENT '来源 IP',
+    system_code  VARCHAR(64)   NULL     COMMENT '所属系统',
+    detail       JSON          NULL     COMMENT '扩展详情（请求参数摘要、拒绝原因等）',
+    decision_id  VARCHAR(64)   NULL     COMMENT '鉴权决策 ID，关联决策链路',
+    PRIMARY KEY (log_id),
+    KEY idx_log_time (operate_time),
+    KEY idx_log_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志（只追加、永久保存）';
+
+CREATE TABLE IF NOT EXISTS iam_permission_change_log (
+    change_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id         BIGINT        NULL     COMMENT '受影响用户（角色级变更可空）',
+    role_id         BIGINT        NULL     COMMENT '受影响角色（用户级变更可空）',
+    change_type     VARCHAR(32)   NOT NULL COMMENT '类型：GRANT / REVOKE / SEAL / ROLE_UPDATE / SCOPE_UPDATE',
+    before_snapshot JSON          NULL     COMMENT '变更前快照',
+    after_snapshot  JSON          NULL     COMMENT '变更后快照',
+    operator        BIGINT        NULL     COMMENT '操作人',
+    changed_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
+    remark          VARCHAR(500)  NULL     COMMENT '备注',
+    PRIMARY KEY (change_id),
+    KEY idx_pcl_user (user_id),
+    KEY idx_pcl_time (changed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限变更快照（只追加）';
 ----
 
 '''
