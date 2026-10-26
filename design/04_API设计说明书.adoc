@@ -1,8 +1,9 @@
 = 统一应用软件权限管理系统 API 设计说明书
 :doctype: book
 :toc: left
+:toclevels: 3
 
-[cols="1,1"]
+[cols="1,3"]
 |===
 | 项目 | 内容
 
@@ -10,983 +11,430 @@
 
 | 项目全称 | 统一应用软件权限管理系统（RBAC 统一身份与权限平台）
 
-| 文档版本 | V1.0
+| 文档版本 | V2.0
 
-| 编制单位 | 信息中心 / 系统架构组
+| 修订说明 | V1.0（2026-10-20）：按目标系统设计的接口。V2.0（2026-10-26）：按后端实际代码重写——路径、参数形式、字段命名、响应包、错误码与 Controller 一致；已实现、待实现、规划中的接口分别标注；V1.0 中尚未实现的设计（SSO、刷新令牌、对外签名、幂等、审批流等）移至第 6 章"规划接口"
 
-| 上游依据 | 《统一应用软件权限管理系统需求规格说明书（SRS）》V1.0、《统一应用软件权限管理系统 概要/结构化设计说明书》V1.0
+| 上游依据 | 《需求规格说明书》V1.1、《详细设计说明书》V2.0、《数据库设计说明书》V1.2
 
-| 适用阶段 | 详细设计阶段（课程期末大作业交付物）
+| 定位 | 《详细设计说明书》的接口部分，第 6 章各模块对外接口的 HTTP 形式
+
+| 适用阶段 | 详细设计（第一次检查：RBAC0）
 
 | 密级 | 内部
 |===
 
-'''
+== 1 设计约定
 
-=== 1. 设计约定
+=== 1.1 基础约定
 
-==== 1.1 基础约定
-
-[cols="1,1"]
+[cols="1,3"]
 |===
 | 项 | 约定
 
-| Base URL | `/api/v1`
+| Base URL | `/api/v1`（`server.servlet.context-path`）。下文路径均省略该前缀，例如 `POST /auth/login` 的完整地址为 `/api/v1/auth/login`
 
-| 协议 | HTTPS（生产强制 TLS 1.2+）
+| 数据格式 | 响应统一 `application/json; charset=utf-8`
 
-| 数据格式 | 请求/响应统一 `application/json; charset=utf-8`
+| 字段命名 | 小驼峰（camelCase），与后端 Java 字段一致：`userId`、`roleCode`、`pageSize`
 
-| 时间格式 | ISO8601，含时区，如 `2025-06-01T09:30:00+08:00`
+| 参数形式 | 除特别标注外，参数均为 *query / 表单参数*（`@RequestParam`）；标注"请求体"的为 JSON（`@RequestBody`）
 
-| 字段命名 | 小写下划线（`user_id`、`system_code`、`api_path`）
+| ID 类型 | 主键为 `Long` 自增整数；登录响应中的 `userId` 为字符串
 
-| 分页参数 | 请求 `page`（从 1 开始）、`page_size`（默认 20，最大 200）；响应 `total`、`list`
+| 时间格式 | ISO 8601 本地时间，不带时区：`2026-10-24T16:13:19`（时区为 Asia/Shanghai）。请求中的时间参数（如 `expireTime`）使用同一格式
 
-| 排序参数 | `sort_by`、`sort_order`（`asc`/`desc`）
+| 枚举取值 | 大写编码：账号状态 `NORMAL / DISABLED / SEALED / LOCKED`；角色类型 `FUNC / DATA`；操作取值 `NONE / VIEW / ALL / VIEW_EDIT …`（12 种，见《数据库设计说明书》3.8）
 
-| 请求追踪 | 所有请求头携带 `X-Request-Id`（UUID），响应原样回传，用于日志关联
-
-| 幂等 | 写接口支持请求头 `Idempotency-Key`（UUID），同 key 在 24h 内重复提交返回首次结果
-
-| 版本演进 | 破坏性变更升 `/api/v2`；非破坏性字段新增不升版本
+| 分页 | 请求参数 `page`（从 1 开始，默认 1）、`size`（默认 20）；响应为 `PageResult`（1.3 节）
 |===
 
-==== 1.2 认证方式
+=== 1.2 认证与鉴权
 
-[cols="1,1,1"]
-|===
-| 场景 | 方式 | 说明
+* 除 `POST /auth/login` 外，所有接口必须携带请求头 `Authorization: Bearer {accessToken}`。
+* 每个请求由拦截器依次执行：
+. *认证*：校验令牌签名、签发方、有效期，并确认令牌未被吊销。失败返回 401（2001～2004）。
+. *鉴权*：若当前接口（Controller 映射模板 + HTTP 方法，如 `PUT /users/{userId}/status`）已在 `iam_function_point` 中登记为 `ADMIN` 系统的功能点，则要求当前用户经角色拥有该功能点，否则返回 403（2007）。未登记的接口只要求登录。
+* 初始化数据 `seed.sql` 已把第 3 章全部已实现的管理端接口登记为功能点，并授予超级管理员角色 `SUPER_ADMIN`；默认管理员 `admin / Admin@123`。
 
-| 管理后台（Web） | Bearer Token | 登录后签发 JWT 访问令牌（`access_token`，默认 2h）+ 刷新令牌（`refresh_token`，默认 7d）
+=== 1.3 统一响应包
 
-| 对外 OpenAPI（18 套业务系统） | appKey/appSecret + 签名 | 请求头 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`；签名算法 `HMAC-SHA256(appSecret, method + path + timestamp + nonce + body_sha256)`
+所有接口返回 `Result`：
 
-| 高安全场景（可选） | 双向 TLS | 业务系统客户端证书校验，与签名二选一或叠加
-|===
-
-_防重放_：`X-Timestamp` 与服务端时间偏差超过 300s 拒绝；`X-Nonce` 在有效窗口内唯一（Redis 记录，TTL=300s），重复即拒绝。所有对外接口响应携带 `X-Request-Id` 与 `X-Server-Time`。
-
-==== 1.3 统一响应包
-
-```json
+[source,json]
+----
 {
   "code": 0,
   "message": "success",
   "data": {},
-  "request_id": "b1e2c3d4-...",
-  "timestamp": "2025-06-01T09:30:00+08:00"
+  "timestamp": "2026-10-24T16:13:19.170295"
 }
-```
+----
 
-[cols="1,1,1"]
+[cols="1,1,3"]
 |===
 | 字段 | 类型 | 说明
 
-| code | int | 业务码，0 表示成功
+| code | int | 业务码，0 表示成功，其余见 1.4 节
 
 | message | string | 人类可读信息
 
-| data | object/array/null | 业务数据
+| data | object / array | 业务数据；为空时整个字段省略（只对 `Result` 本层生效，`data` 内部对象的空字段仍输出为 `null`）
 
-| request_id | string | 请求追踪 ID
-
-| timestamp | string | 服务端时间（ISO8601）
+| timestamp | string | 服务端时间
 |===
 
-分页响应 `data` 结构：
+分页接口的 `data` 为 `PageResult`：
 
-```json
-{ "total": 10000, "page": 1, "page_size": 20, "list": [] }
-```
+[source,json]
+----
+{ "total": 1, "page": 1, "pageSize": 20, "list": [] }
+----
 
-==== 1.4 统一错误码表
+=== 1.4 错误码
 
-[cols="1,1,1,1,1,1"]
+HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java` 一致）。"RBAC0 使用"列标出当前已实现接口会返回的错误码。
+
+[cols="1,2,1,3,1"]
 |===
-| 分段 | 含义 | 错误码 | 名称 | HTTP | 说明
+| 业务码 | 名称 | HTTP | 说明 | RBAC0 使用
 
-| 0 | 成功 | 0 | SUCCESS | 200 | 成功
+| 0 | SUCCESS | 200 | 成功 | 是
 
-| 1xxx | 参数/校验 | 1001 | PARAM_INVALID | 400 | 参数校验失败（附 `data.errors`）
+| 1001 | PARAM_INVALID | 400 | 参数校验失败：缺少必填参数、类型错误、枚举取值非法、业务参数不合法 | 是
 
-|  |  | 1002 | PARAM_MISSING | 400 | 必填参数缺失
+| 1002 | PARAM_MISSING | 400 | 必填参数缺失（登录账号或密码为空） | 是
 
-|  |  | 1003 | PARAM_FORMAT_ERROR | 400 | 格式错误（时间/枚举/JSON）
+| 1003 | PARAM_FORMAT_ERROR | 400 | 格式错误 | 否
 
-|  |  | 1004 | IDEMPOTENCY_CONFLICT | 409 | 幂等键冲突且请求体不一致
+| 1004 | IDEMPOTENCY_CONFLICT | 409 | 幂等键冲突 | 否
 
-| 2xxx | 认证授权 | 2001 | UNAUTHENTICATED | 401 | 未登录/未携带令牌
+| 1005 | RESOURCE_NOT_FOUND | 404 | 资源不存在（用户、角色、模块、功能点、绑定、未知路径） | 是
 
-|  |  | 2002 | TOKEN_INVALID | 401 | 令牌无效（签名错误/格式错误）
+| 2001 | UNAUTHENTICATED | 401 | 未登录 / 未携带令牌 / 账号或密码错误 | 是
 
-|  |  | 2003 | TOKEN_EXPIRED | 401 | 令牌过期
+| 2002 | TOKEN_INVALID | 401 | 令牌无效（签名或格式错误、令牌库中不存在） | 是
 
-|  |  | 2004 | TOKEN_REVOKED | 401 | 令牌已吊销
+| 2003 | TOKEN_EXPIRED | 401 | 令牌过期 | 是
 
-|  |  | 2005 | ACCOUNT_SEALED | 403 | 账号已封存（离职）
+| 2004 | TOKEN_REVOKED | 401 | 令牌已吊销（已登出、账号被停用或封存） | 是
 
-|  |  | 2006 | ACCOUNT_DISABLED | 403 | 账号停用/锁定
+| 2005 | ACCOUNT_SEALED | 403 | 账号已封存（离职） | 是
 
-|  |  | 2007 | NO_FUNCTION_PERM | 403 | 无功能权限
+| 2006 | ACCOUNT_DISABLED | 403 | 账号停用或锁定；授予角色时用户非正常状态 | 是
 
-|  |  | 2008 | OUT_OF_DATA_SCOPE | 403 | 越数据范围
+| 2007 | NO_FUNCTION_PERM | 403 | 无功能权限 | 是
 
-|  |  | 2009 | SIGNATURE_INVALID | 401 | 对外接口签名校验失败
+| 2008 | OUT_OF_DATA_SCOPE | 403 | 越数据范围 | RBAC3
 
-|  |  | 2010 | REPLAY_DETECTED | 401 | 防重放命中（timestamp/nonce）
+| 2009～2011 | SIGNATURE_INVALID / REPLAY_DETECTED / APP_DISABLED | 401 / 401 / 403 | 对外签名、防重放、接入停用 | 扩展
 
-|  |  | 2011 | APP_DISABLED | 403 | 业务系统接入已停用
+| 3001 | ROLE_MUTEX_CONFLICT | 409 | 角色互斥冲突 | RBAC3
 
-| 3xxx | 业务规则 | 3001 | ROLE_MUTEX_CONFLICT | 409 | 角色互斥冲突
+| 3002 | ROLE_INHERIT_CYCLE | 409 | 角色继承成环 | RBAC1
 
-|  |  | 3002 | ROLE_INHERIT_CYCLE | 409 | 角色继承成环
+| 3003 | ORG_MOVE_INVALID | 409 | 组织节点移动非法 | RBAC3
 
-|  |  | 3003 | ORG_MOVE_INVALID | 409 | 组织节点移动非法（成环/跨级）
+| 3004 | USER_ALREADY_SEALED | 409 | 用户已封存，不能再变更状态 | 是
 
-|  |  | 3004 | USER_ALREADY_SEALED | 409 | 用户已封存
+| 3005 | GRANT_DUPLICATE | 409 | 重复授权 | 是
 
-|  |  | 3005 | GRANT_DUPLICATE | 409 | 重复授权
+| 3006～3008 | APPROVAL_REQUIRED / DATA_SCOPE_EXPIRED / LOCK_ACQUIRE_FAILED | 409 | 审批流、临时授权过期、分布式锁 | 扩展 / RBAC3
 
-|  |  | 3006 | APPROVAL_REQUIRED | 409 | 需审批流（未走审批）
+| 3009 | RESOURCE_DUPLICATE | 409 | 资源已存在（账号、角色编码、系统编码、API 已登记） | 是
 
-|  |  | 3007 | DATA_SCOPE_EXPIRED | 409 | 临时授权已过期
+| 4001 | RATE_LIMITED | 429 | 触发限流 | 扩展
 
-|  |  | 3008 | LOCK_ACQUIRE_FAILED | 409 | 分布式锁获取失败（并发冲突）
+| 5000 | INTERNAL_ERROR | 500 | 服务器内部错误 | 是
 
-| 4xxx | 限流 | 4001 | RATE_LIMITED | 429 | 触发限流（附 `Retry-After`）
-
-| 5xxx | 服务器 | 5000 | INTERNAL_ERROR | 500 | 服务器内部错误
-
-|  |  | 5001 | SERVICE_UNAVAILABLE | 503 | 依赖服务不可用（可降级）
-
-|  |  | 5002 | DEGRADED | 200 | 决策服务降级（业务侧按短缓存处理）
+| 5001～5002 | SERVICE_UNAVAILABLE / DEGRADED | 503 / 200 | 依赖不可用 / 决策降级 | 扩展
 |===
 
-==== 1.5 幂等与并发
+错误响应示例（未登记权限的用户调用 `GET /users`）：
 
-* _幂等_：所有 `POST/PUT/PATCH/DELETE` 写接口支持 `Idempotency-Key`；服务端以 `idem:{app_key}:{key}` 存储首次响应（TTL 24h），重复请求体一致返回首次结果，不一致返回 `1004`。
-* _分布式锁_：授权/回收/封存/角色互斥校验等写操作以 `lock:auth:{user_id}`、`lock:role:{role_id}`、`lock:org:{org_id}` 为键加 Redis 分布式锁（超时 10s，看门狗续期）；获取失败返回 `3008`。
-* _乐观锁_：授权关系表、角色表带 `version` 字段，更新时 `WHERE version = ?`，冲突返回 `3008` 并提示重试。
-* _事务性消息_：授权写库与变更事件发布采用发件箱（outbox）模式，保证数据与事件最终一致。
+[source,json]
+----
+{ "code": 2007, "message": "无功能权限: 查询用户列表", "timestamp": "2026-10-24T16:13:19.496944" }
+----
 
-'''
+== 2 接口总览
 
-=== 2. 认证接口（M01）
-
-==== 2.1 POST /auth/login
-
-管理后台账号密码登录。
-
-_请求体_
-
-[cols="1,1,1,1"]
+[cols="1,3,1,1"]
 |===
-| 字段 | 类型 | 必填 | 说明
+| 方法 | 路径 | 说明 | 状态
 
-| username | string | 是 | 登录名（工号或手机号）
-
-| password | string | 是 | 密码（前端 RSA 公钥加密传输）
-
-| captcha_id | string | 否 | 验证码 ID（连续失败 3 次后必填）
-
-| captcha_code | string | 否 | 验证码
-
-| client_ip | string | 否 | 客户端 IP（服务端亦可从连接获取）
-|===
-
-_响应体 data_
-
-[cols="1,1,1"]
-|===
-| 字段 | 类型 | 说明
-
-| access_token | string | 访问令牌（JWT，2h）
-
-| refresh_token | string | 刷新令牌（7d）
-
-| token_type | string | 固定 `Bearer`
-
-| expires_in | int | 访问令牌有效期（秒）
-
-| user_id | string | 用户 ID
-
-| display_name | string | 脱敏展示名（如 `张*`）
-
-| account_status | string | `normal`/`disabled`/`sealed`/`locked`
+| POST | `/auth/login` | 登录 | 已实现
+| POST | `/auth/logout` | 登出 | 已实现
+| GET | `/auth/validate` | 令牌校验 | 已实现
+| POST | `/users` | 创建用户 | 已实现
+| GET | `/users` | 用户列表（分页） | 已实现
+| GET | `/users/{userId}` | 用户详情 | 已实现
+| PUT | `/users/{userId}/status` | 变更账号状态 / 封存 | 已实现
+| POST | `/roles` | 新建角色 | 已实现
+| GET | `/roles` | 角色列表 | 已实现
+| GET | `/roles/{roleId}` | 角色详情 | 已实现
+| POST | `/roles/grants` | 为用户授予角色 | 已实现
+| DELETE | `/roles/grants` | 撤销用户角色 | 已实现
+| GET | `/roles/grants/{userId}` | 查询用户的角色绑定 | 已实现
+| POST | `/systems` | 登记接入系统 | 已实现
+| GET | `/systems` | 系统列表 | 已实现
+| POST | `/systems/modules` | 登记模块 | 已实现
+| POST | `/systems/function-points` | 登记功能点 | 已实现
+| POST | `/systems/role-functions` | 为角色绑定功能点 | 已实现
+| DELETE | `/systems/role-functions` | 解绑角色功能点 | 已实现
+| GET | `/systems/role-functions/{roleId}` | 查询角色已绑定的功能点 | 已实现
+| GET | `/open/authorize` | 单点权限判定 | 已实现
+| POST | `/open/authorize/batch` | 批量权限判定 | 已实现
+| GET | `/open/permissions` | 查询用户在某系统的功能点集合 | 已实现
+| POST / GET | `/roles/{roleId}/exclusions` | 配置 / 查询角色互斥 | RBAC3（待实现）
+| POST / GET | `/systems/data-scopes` | 创建 / 查询数据范围 | RBAC3（待实现）
+| POST | `/systems/role-data-scopes` | 为角色绑定数据范围 | RBAC3（待实现）
+| POST / GET / PUT | `/orgs`、`/orgs/{orgId}`、`/orgs/{orgId}/children`、`/orgs/{orgId}/move` | 组织机构 | RBAC3（待实现）
+| GET | `/audit-logs` | 审计日志查询 | RBAC3（待实现）
 |===
 
-==== 2.2 POST /auth/logout
+"待实现"接口的 Controller 与签名已定义，调用时返回 500；参数见第 5 章。
 
-_请求头_：`Authorization: Bearer {access_token}`
+== 3 管理端接口（已实现）
 
-_请求体_
+=== 3.1 认证（M01）
 
-[cols="1,1,1,1"]
+==== POST /auth/login
+
+请求体（JSON）：
+
+[cols="1,1,1,3"]
 |===
 | 字段 | 类型 | 必填 | 说明
 
-| refresh_token | string | 否 | 一并吊销刷新令牌
-
-| all_devices | boolean | 否 | 是否吊销该用户全部会话，默认 false
+| username | string | 是 | 账号（`user_no`）
+| password | string | 是 | 密码
+| captchaId / captchaCode | string | 否 | 验证码（预留，当前不校验）
+| clientIp | string | 否 | 客户端 IP，写入令牌记录
 |===
 
-_响应体 data_：`{ "revoked": true }`
+响应 `data`：
 
-==== 2.3 POST /auth/refresh
-
-_请求体_
-
-[cols="1,1,1,1"]
-|===
-| 字段 | 类型 | 必填 | 说明
-
-| refresh_token | string | 是 | 刷新令牌
-|===
-
-_响应体 data_：同登录（新 `access_token` + 轮换后的 `refresh_token`）。
-
-==== 2.4 GET /auth/profile
-
-_请求头_：`Authorization: Bearer {access_token}`
-
-_响应体 data_
-
-[cols="1,1,1"]
+[cols="1,1,3"]
 |===
 | 字段 | 类型 | 说明
 
-| user_id | string | 用户 ID
-
-| username | string | 登录名
-
-| display_name | string | 脱敏姓名
-
-| phone_masked | string | 脱敏电话（如 `138****5678`）
-
-| org_id | string | 所属组织 ID
-
-| org_path | array | 组织路径（总公司→分公司→部门→项目经理部）
-
-| roles | array | `[{role_id, role_name, role_type}]`
-
-| account_status | string | 账号状态
-
-| permission_version | int | 权限版本号（前端据此判断是否需刷新）
+| accessToken | string | 访问令牌（JWT，有效期 2 小时）
+| tokenType | string | 固定 `Bearer`
+| expiresIn | long | 有效期（秒），默认 7200
+| userId | string | 用户 ID
+| displayName | string | 姓名（解密后）
+| accountStatus | string | 账号状态
+| refreshToken | string | 刷新令牌，当前固定为 `null`（规划接口，见 6.1）
 |===
 
-==== 2.5 SSO 接口
+错误：1002（账号或密码为空）、2001（账号或密码错误，不区分账号是否存在）、2005（已封存）、2006（停用 / 锁定）。
 
-_GET /sso/authorize_
+==== POST /auth/logout
 
-[cols="1,1,1,1"]
-|===
-| 参数 | 位置 | 必填 | 说明
+请求头携带要吊销的令牌。成功后该令牌立即失效（再次使用返回 2004）。令牌不存在时视为已登出，同样返回成功。
 
-| system_code | query | 是 | 业务系统编码（如 `PMIS`）
+==== GET /auth/validate
 
-| redirect_uri | query | 是 | 回跳地址（须与登记一致）
+请求头携带令牌，`data` 为 `true` / `false`。令牌无效时由拦截器直接返回 401，不会到达本接口。
 
-| state | query | 是 | 防 CSRF 随机串，原样回传
-|===
+=== 3.2 用户账号（M02）
 
-_响应_：302 重定向至 `redirect_uri?code={一次性授权码}&state={state}`；授权码有效期 60s，一次性使用。
+用户接口返回 `UserView`（不含密码哈希与密文）：
 
-_POST /sso/token_
-
-[cols="1,1,1,1"]
-|===
-| 字段 | 类型 | 必填 | 说明
-
-| grant_type | string | 是 | 固定 `authorization_code`
-
-| code | string | 是 | 授权码
-
-| system_code | string | 是 | 业务系统编码
-
-| redirect_uri | string | 是 | 与授权请求一致
-|===
-
-_响应体 data_：`{ access_token, token_type, expires_in, user_id, permission_version }`（业务系统据此建立本地会话，后续调用 `/open/*` 鉴权）。
-
-'''
-
-=== 3. 对外鉴权 OpenAPI（供 18 套业务系统调用，M08/M12）
-
-所有 `/open/*` 接口须携带 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature`，并满足防重放要求（见 1.2）。
-
-==== 3.1 POST /open/token/verify
-
-校验令牌有效性（对应结构化设计 4.2(1)）。
-
-_请求体_
-
-[cols="1,1,1,1"]
-|===
-| 字段 | 类型 | 必填 | 说明
-
-| token | string | 是 | 待校验令牌
-
-| system_code | string | 是 | 业务系统编码
-
-| client_ip | string | 否 | 客户端 IP（用于风控）
-
-| request_id | string | 是 | 业务侧请求 ID（防重放关联）
-|===
-
-_响应体 data_
-
-[cols="1,1,1"]
+[cols="1,1,3"]
 |===
 | 字段 | 类型 | 说明
 
-| valid | boolean | 是否有效
-
-| user_id | string | 用户 ID（有效时返回）
-
-| expire_at | string | 令牌过期时间（ISO8601）
-
-| reason | string | 无效原因：`invalid`/`expired`/`revoked`/`account_sealed`/`account_disabled`
-
-| permission_version | int | 权限版本号（业务侧缓存比对用）
+| id | long | 用户 ID
+| userNo | string | 账号
+| realName | string | 姓名（解密后）
+| phoneMasked | string | 脱敏电话，如 `138****5678`；未填电话时为 `null`
+| orgId | long | 所属组织 ID
+| post | string | 岗位
+| accountStatus | string | 账号状态
+| leaveTime / lastLoginAt | string | 离职时间 / 最近登录时间
+| isDeleted | int | 0 / 1
+| createdAt / updatedAt | string | 创建 / 修改时间
 |===
 
-==== 3.2 POST /open/authorize
-
-鉴权决策（对应结构化设计 4.2(3)、第 6 章 PDP 流程）。
-
-_请求体_
-
-[cols="1,1,1,1"]
+[cols="1,2,3,2"]
 |===
-| 字段 | 类型 | 必填 | 说明
+| 接口 | 参数 | 说明 | 错误
 
-| user_id | string | 是 | 用户 ID
+| `POST /users` | `userNo`、`realName`、`orgId`；可选 `password`、`phone`、`post` | 创建账号，返回 `UserView`。未传 `password` 时使用初始密码（配置项 `iam.default-password`） | 3009 账号已存在；1001 缺参数
 
-| system_code | string | 是 | 业务系统编码
+| `GET /users` | 可选 `page`、`size`、`orgId`、`accountStatus` | 分页查询未删除的账号，返回 `PageResult<UserView>` | —
 
-| api_path | string | 是 | 被访问 API 路径（如 `/pmis/project/123`）
+| `GET /users/{userId}` | — | 账号详情 | 1005
 
-| http_method | string | 是 | `GET`/`POST`/`PUT`/`DELETE` 等
-
-| target_data | object | 否 | 数据目标：`{org_id, project_id, owner_id}`
-
-| token | string | 是 | 用户令牌
-
-| request_id | string | 是 | 业务侧请求 ID
+| `PUT /users/{userId}/status` | `targetStatus`；可选 `reason` | 变更状态。非 `NORMAL` 时吊销该用户全部令牌；`SEALED` 时同时回收全部角色并记录离职时间 | 1001 状态取值非法；1005；3004 已封存
 |===
 
-_响应体 data_
+=== 3.3 角色与授权（M04 / M07）
 
-[cols="1,1,1"]
+[cols="1,2,3,2"]
 |===
-| 字段 | 类型 | 说明
+| 接口 | 参数 | 说明 | 错误
 
-| allow | boolean | 是否允许
+| `POST /roles` | `roleCode`、`roleName`、`roleType`（FUNC/DATA）；可选 `description` | 新建角色，状态为 `ACTIVE`，返回角色 | 3009 编码已存在；1001 类型非法
 
-| deny_reason | string | 拒绝原因：`token_invalid`/`account_sealed`/`no_function_perm`/`out_of_data_scope`/`degraded`
+| `GET /roles` | — | 未删除的角色列表 | —
 
-| decision_id | string | 决策 ID（用于审计关联与追溯）
+| `GET /roles/{roleId}` | — | 角色详情 | 1005
 
-| matched_function_point_id | string | 命中的功能点 ID
+| `POST /roles/grants` | `userId`、`roleId`；可选 `expireTime`、`grantBy`、`grantReason` | 为用户授予角色，返回绑定记录（`status = ACTIVE`）。撤销后再次授予会复用原记录 | 1005 用户或角色不存在；2006 用户非正常状态；1001 角色已停用或失效时间早于当前；3005 重复授权
 
-| required_operation | string | 所需操作（12 种取值之一）
+| `DELETE /roles/grants` | `userId`、`roleId` | 撤销用户角色，绑定置为 `REVOKED`，下一次请求起失去对应权限 | 1005 未授予该角色
 
-| permission_version | int | 权限版本号
-|===
-
-==== 3.3 GET /open/permissions
-
-查询用户在某系统的功能权限 + 数据权限（前端菜单/按钮渲染用，对应结构化设计 4.2(2)）。
-
-_查询参数_
-
-[cols="1,1,1"]
-|===
-| 参数 | 必填 | 说明
-
-| user_id | 是 | 用户 ID
-
-| system_code | 是 | 业务系统编码
-
-| module_code | 否 | 仅查某模块
+| `GET /roles/grants/{userId}` | — | 用户的全部角色绑定（含已回收） | —
 |===
 
-_响应体 data_
+=== 3.4 系统与功能权限（M05）
 
-[cols="1,1,1"]
+[cols="1,2,3,2"]
 |===
-| 字段 | 类型 | 说明
+| 接口 | 参数 | 说明 | 错误
 
-| user_id | string | 用户 ID
+| `POST /systems` | `systemCode`、`systemName`；可选 `description` | 登记接入系统 | 3009 编码已存在
 
-| system_code | string | 系统编码
+| `GET /systems` | — | 未删除的系统列表 | —
 
-| account_status | string | 账号状态
+| `POST /systems/modules` | `systemId`、`moduleCode`、`moduleName`；可选 `sortNo` | 登记模块 | 1005 系统不存在
 
-| permission_version | int | 权限版本号
+| `POST /systems/function-points` | `moduleId`、`pointCode`、`pointName`、`action`；可选 `apiPath`、`apiMethod` | 登记功能点。`apiPath` 写 Controller 映射模板（如 `/users/{userId}`），`apiMethod` 自动转大写；登记后该接口即受鉴权保护 | 1005 模块不存在；1001 操作取值非法；3009 API 已登记
 
-| function_permissions | array | `[{function_point_id, module_code, operation}]`，operation 取 12 种取值之一
+| `POST /systems/role-functions` | query：`roleId`、`allowedAction`，可选 `createdBy`；*请求体*：功能点 ID 数组，如 `[20001, 20002]` | 为角色绑定功能点，已绑定的自动跳过 | 1005 角色不存在 / 已停用 / 功能点不存在；1001 操作取值非法
 
-| data_permissions | array | `[{scope_type, org_id, project_id, expire_at}]`，scope_type ∈ `all_company`/`branch`/`department`/`project`/`self`
-|===
+| `DELETE /systems/role-functions` | query：`roleId`；*请求体*：功能点 ID 数组 | 解绑，未绑定的忽略 | —
 
-==== 3.4 POST /open/event/callback
-
-权限变更回调（平台 → 业务系统，订阅制，对应结构化设计 4.2(4)）。
-
-_订阅方式_：业务系统在 `/open/apps` 登记时配置 `callback_url` 与 `subscribe_events`（如 `["grant_changed","revoked","sealed","role_changed"]`）。
-
-_请求体（平台推送）_
-
-[cols="1,1,1"]
-|===
-| 字段 | 类型 | 说明
-
-| event_id | string | 事件 ID（消费方幂等去重）
-
-| event_type | string | `grant_changed`/`revoked`/`sealed`/`role_changed`
-
-| affected_user_ids | array | 受影响用户 ID 列表
-
-| affected_system_codes | array | 受影响系统编码列表
-
-| change_snapshot | object | 变更前后快照（对应 FR-42）
-
-| occurred_at | string | 发生时间（ISO8601）
-
-| signature | string | 平台签名（业务系统验签）
+| `GET /systems/role-functions/{roleId}` | — | 角色已绑定的功能点列表 | —
 |===
 
-_响应体 data_：`{ "ack": true, "event_id": "..." }`；业务系统须在 5s 内返回，超时平台按指数退避重试（最多 5 次），消费方按 `event_id` 幂等。
+== 4 开放鉴权接口（已实现）
 
-==== 3.5 POST /open/apps
+供业务系统和前端调用，同样需要 `Authorization` 头。判定规则见《详细设计说明书》6.6 节。
 
-业务系统接入登记（对应结构化设计 4.2(6)、M12）。
-
-_请求体_
-
-[cols="1,1,1,1"]
+[cols="1,2,3"]
 |===
-| 字段 | 类型 | 必填 | 说明
+| 接口 | 参数 | 响应 `data`
 
-| system_code | string | 是 | 系统编码（唯一，如 `PMIS`）
+| `GET /open/authorize` | `userId`、`systemCode`、`functionPointId` | `true` / `false`
 
-| system_name | string | 是 | 系统名称
+| `POST /open/authorize/batch` | *请求体*：`{"userId": 2, "systemCode": "ADMIN", "functionPointIds": [20001, 20002]}` | `{"results": {"20001": true, "20002": false}}`
 
-| callback_url | string | 是 | 变更回调地址
-
-| subscribe_events | array | 是 | 订阅事件类型列表
-
-| public_key | string | 否 | 业务系统公钥（双向 TLS 或验签用）
-
-| contact | string | 否 | 联系人
-
-| description | string | 否 | 描述
+| `GET /open/permissions` | `userId`、`systemCode` | 功能点 ID 数组，如 `[10001, 10003, 20001]`。前端据此控制菜单与按钮（FR-36、FR-39）
 |===
 
-_响应体 data_
+说明：当前任何已登录用户都可以查询其他用户的权限（这三个接口未登记为功能点）。对外开放给业务系统前，应改为应用级签名认证（6.1 节）或只允许查询本人。
 
-[cols="1,1,1"]
+== 5 已定义、待实现的接口（RBAC3）
+
+以下接口的 Controller 已定义签名，Service 为"待实现"，调用返回 500：
+
+[cols="1,3,1"]
 |===
-| 字段 | 类型 | 说明
+| 接口 | 参数 | 需求
 
-| app_key | string | 平台分配的应用 Key
-
-| app_secret | string | 平台分配的应用密钥（仅首次返回，须安全保存）
-
-| system_code | string | 系统编码
-
-| status | string | `active`
-|===
-
-'''
-
-=== 4. 管理端接口（管理后台，M02~M07/M09/M12）
-
-所有 `/admin/*` 接口须携带 `Authorization: Bearer {access_token}`；写接口均落审计日志（见第 6 章）。
-
-==== 4.1 组织机构（M03）
-
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
-
-| GET | /admin/orgs | 组织列表（分页） | `page`、`page_size`、`org_type`、`parent_id`
-
-| GET | /admin/orgs/tree | 组织树查询 | `root_id`、`depth`、`include_member_count`
-
-| POST | /admin/orgs | 新建组织节点 | `org_name`、`org_type`、`parent_id`、`leader_user_id`
-
-| GET | /admin/orgs/{org_id} | 组织详情 | —
-
-| PUT | /admin/orgs/{org_id} | 更新组织 | `org_name`、`leader_user_id`、`version`
-
-| DELETE | /admin/orgs/{org_id} | 删除组织（须无子节点与成员） | `version`
-
-| POST | /admin/orgs/{org_id}/move | 移动节点 | `new_parent_id`、`version`（校验成环/跨级）
+| `POST /roles/{roleId}/exclusions` | `excludedRoleId`；可选 `reason` | FR-14
+| `GET /roles/{roleId}/exclusions` | — | FR-14
+| `POST /systems/data-scopes` | `scopeCode`、`scopeName`；可选 `description`、`sortNo` | FR-22
+| `GET /systems/data-scopes` | — | FR-22
+| `POST /systems/role-data-scopes` | `roleId`、`scopeType`；可选 `orgId`、`projectId`、`createdBy` | FR-22、FR-23
+| `POST /orgs` | `orgCode`、`orgName`、`orgType`、`orgLevel`；可选 `parentId`、`sortNo` | FR-08
+| `GET /orgs` | 可选 `rootId` | FR-08
+| `GET /orgs/{orgId}`、`GET /orgs/{orgId}/children` | — | FR-08
+| `PUT /orgs/{orgId}/move` | `newParentId` | FR-09
+| `GET /audit-logs` | 可选 `page`、`size`、`userId`、`systemCode`、`startTime`、`endTime` | FR-45
 |===
 
-==== 4.2 用户账号（M02）
+实现时同步：返回值统一改为 `PageResult` 或视图对象，审计日志字段以《数据库设计说明书》3.13 节为准。
 
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
+== 6 规划接口（扩展，尚未实现）
 
-| GET | /admin/users | 用户列表（姓名/电话脱敏返回） | `page`、`page_size`、`org_id`、`account_status`、`keyword`
+V1.0 中设计、当前代码尚未实现的能力，保留设计要点作为后续实现依据：
 
-| POST | /admin/users | 新建用户 | `username`、`real_name`、`phone`、`org_id`、`position`
+=== 6.1 认证扩展
 
-| GET | /admin/users/{user_id} | 用户详情（脱敏） | —
+* `POST /auth/refresh`：刷新令牌换取新的访问令牌（FR-34 续期）。
+* `GET /auth/profile`：当前用户信息、角色列表与权限版本号。
+* SSO：`GET /sso/authorize`（携带 `systemCode`、`redirectUri`、`state`，302 回跳一次性授权码）、`POST /sso/token`（授权码换令牌）（FR-31）。
+* 对外应用认证：业务系统以 `X-App-Key`、`X-Timestamp`、`X-Nonce`、`X-Signature` 签名调用 `/open/*`，时间偏差超过 300 秒或 nonce 重复即拒绝（NFR-04）。实现时需在 `iam_system` 增加应用密钥字段。
 
-| PUT | /admin/users/{user_id} | 更新用户 | `real_name`、`phone`、`org_id`、`version`
+=== 6.2 管理与通知扩展
 
-| PATCH | /admin/users/{user_id}/status | 状态变更（停用/封存/锁定/启用） | `target_status`、`reason`、`version`
+* 授权申请—审批—执行流程（FR-30）。
+* 批量导入账号、权限矩阵查询与导出、审计日志导出（FR-06、FR-21、FR-46）。
+* 权限变更回调：平台向业务系统 `callback_url` 推送 `{eventId, eventType, affectedUserIds, affectedSystemCodes, occurredAt}`，消费方按 `eventId` 幂等（FR-43）。
+* 请求追踪 `X-Request-Id` 回传、写接口幂等键 `Idempotency-Key`。
 
-| POST | /admin/users/import | 批量导入（Excel/CSV） | `file`、`dry_run`
+=== 6.3 安全与限流
 
-| GET | /admin/users/{user_id}/permission-overview | 用户权限总览（角色+功能+数据范围，姓名电话脱敏） | `system_code`（可选）
-|===
+* 限流：按用户、IP、调用方系统三个维度，超限返回 429（4001）。
+* 防越权：功能权限防垂直越权（已实现）；数据范围防水平越权，"本人"类权限在服务端用当前登录用户回填过滤条件，不信任前端传入的用户 ID（RBAC3）。
+* 审计：所有写接口及失败操作写入审计日志，字段见《数据库设计说明书》3.13 节（RBAC3）。
 
-==== 4.3 角色（M04）
+== 7 典型调用示例
 
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
+以下示例为在 MySQL 8.0 上导入 `schema.sql`、`seed.sql` 后的真实响应（时间戳略）。
 
-| GET | /admin/roles | 角色列表 | `page`、`page_size`、`role_type`、`status`
+=== 7.1 登录
 
-| POST | /admin/roles | 新建角色 | `role_name`、`role_type`（`function`/`data`）、`description`
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"Admin@123"}'
+----
 
-| GET | /admin/roles/{role_id} | 角色详情 | —
-
-| PUT | /admin/roles/{role_id} | 更新角色 | `role_name`、`description`、`version`
-
-| DELETE | /admin/roles/{role_id} | 删除角色（须无绑定） | `version`
-
-| GET | /admin/roles/tree | 角色继承树 | `root_id`
-
-| POST | /admin/roles/{role_id}/inherit | 配置继承关系 | `parent_role_id`（校验成环）
-
-| POST | /admin/roles/mutex | 配置角色互斥 | `role_id_a`、`role_id_b`、`reason`
-|===
-
-==== 4.4 功能权限（M05/M12）
-
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
-
-| GET | /admin/systems | 业务系统列表 | `page`、`page_size`、`status`
-
-| POST | /admin/systems | 系统登记 | `system_code`、`system_name`、`callback_url`
-
-| GET | /admin/modules | 模块列表 | `system_code`、`page`、`page_size`
-
-| POST | /admin/modules | 新建模块 | `system_code`、`module_code`、`module_name`、`parent_id`
-
-| GET | /admin/function-points | 功能点列表 | `system_code`、`module_code`、`page`、`page_size`
-
-| POST | /admin/function-points | 新建功能点 | `module_code`、`function_point_code`、`function_point_name`、`api_path`、`http_method`、`operation_set`
-
-| PUT | /admin/function-points/{id} | 更新功能点（含 API 映射） | `api_path`、`http_method`、`operation_set`、`version`
-
-| GET | /admin/permission-matrix | 权限矩阵查询 | `role_id`、`system_code`、`module_code`
-
-| GET | /admin/permission-matrix/export | 权限矩阵导出 | 同上，返回 Excel
-|===
-
-==== 4.5 数据权限（M06）
-
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
-
-| GET | /admin/data-scopes | 数据范围字典 | `scope_type`
-
-| POST | /admin/role-data-scopes | 角色-数据范围授权 | `role_id`、`scope_type`、`org_id`、`project_id`、`expire_at`（临时授权有效期）
-
-| GET | /admin/role-data-scopes | 查询角色数据范围授权 | `role_id`、`include_expired`
-
-| DELETE | /admin/role-data-scopes/{id} | 回收数据范围授权 | `version`
-|===
-
-==== 4.6 授权管理（M07）
-
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
-
-| POST | /admin/user-roles | 用户-角色授予（走审批流） | `user_id`、`role_ids`、`reason`、`effective_at`、`expire_at`
-
-| DELETE | /admin/user-roles | 用户-角色回收 | `user_id`、`role_ids`、`reason`
-
-| GET | /admin/user-roles | 查询用户角色绑定 | `user_id`、`include_history`
-
-| GET | /admin/grant-snapshots | 授权变更快照查询 | `user_id`、`start_time`、`end_time`、`change_type`
-
-| POST | /admin/grants/{grant_id}/approve | 审批通过 | `approver_id`、`comment`
-
-| POST | /admin/grants/{grant_id}/reject | 审批驳回 | `approver_id`、`comment`
-|===
-
-==== 4.7 审计日志（M09）
-
-[cols="1,1,1,1"]
-|===
-| 方法 | 路径 | 说明 | 关键参数
-
-| GET | /admin/audit-logs | 日志查询 | `start_time`、`end_time`、`username`、`operation_type`、`success`、`page`、`page_size`
-
-| GET | /admin/audit-logs/export | 日志导出（导出操作自身落审计） | 同上 + `format`（`csv`/`xlsx`）
-|===
-
-'''
-
-=== 5. 典型接口示例
-
-==== 5.1 登录
-
-_请求_
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-X-Request-Id: 7f3a1c2e-9b4d-4e8a-a1b2-c3d4e5f60718
-Idempotency-Key: 0a1b2c3d-4e5f-6789-abcd-ef0123456789
-
-{
-  "username": "zhangsan",
-  "password": "RSA_ENCRYPTED_BASE64...",
-  "client_ip": "10.20.30.40"
-}
-```
-
-_响应_
-
-```json
+[source,json]
+----
 {
   "code": 0,
   "message": "success",
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "rt_9f8e7d6c5b4a...",
-    "token_type": "Bearer",
-    "expires_in": 7200,
-    "user_id": "U10086",
-    "display_name": "张*",
-    "account_status": "normal"
-  },
-  "request_id": "7f3a1c2e-9b4d-4e8a-a1b2-c3d4e5f60718",
-  "timestamp": "2025-06-01T09:30:00+08:00"
-}
-```
-
-==== 5.2 对外鉴权决策
-
-_请求_
-
-```http
-POST /api/v1/open/authorize
-Content-Type: application/json
-X-App-Key: PMIS_APP_KEY
-X-Timestamp: 1748731800
-X-Nonce: 5f2e1d0c-9b8a-7f6e-5d4c-3b2a1f0e9d8c
-X-Signature: HMAC_SHA256_HEX...
-X-Request-Id: 2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f
-
-{
-  "user_id": "U10086",
-  "system_code": "PMIS",
-  "api_path": "/pmis/project/123/approve",
-  "http_method": "POST",
-  "target_data": { "org_id": "ORG_BRIDGE_01", "project_id": "P2025001", "owner_id": "U10086" },
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "request_id": "2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f"
-}
-```
-
-_响应（允许）_
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "allow": true,
-    "deny_reason": null,
-    "decision_id": "DEC_20250601_0001",
-    "matched_function_point_id": "FP_PMIS_PROJECT_APPROVE",
-    "required_operation": "查看/审批",
-    "permission_version": 1024
-  },
-  "request_id": "2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f",
-  "timestamp": "2025-06-01T09:31:00+08:00"
-}
-```
-
-_响应（拒绝-越数据范围）_
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "allow": false,
-    "deny_reason": "out_of_data_scope",
-    "decision_id": "DEC_20250601_0002",
-    "matched_function_point_id": "FP_PMIS_PROJECT_APPROVE",
-    "required_operation": "查看/审批",
-    "permission_version": 1024
-  },
-  "request_id": "2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f",
-  "timestamp": "2025-06-01T09:31:00+08:00"
-}
-```
-
-==== 5.3 用户授权角色
-
-_请求_
-
-```http
-POST /api/v1/admin/user-roles
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-Content-Type: application/json
-Idempotency-Key: 1a2b3c4d-5e6f-7890-abcd-ef1234567890
-
-{
-  "user_id": "U10086",
-  "role_ids": ["R_SAFETY_OFFICER", "R_PROJECT_MANAGER"],
-  "reason": "调岗至桥梁工程分公司第一项目经理部任项目经理",
-  "effective_at": "2025-06-01T00:00:00+08:00",
-  "expire_at": null
-}
-```
-
-_响应_
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "grant_id": "G_20250601_0001",
-    "user_id": "U10086",
-    "role_ids": ["R_SAFETY_OFFICER", "R_PROJECT_MANAGER"],
-    "status": "pending_approval",
-    "approval_flow_id": "AF_20250601_0001",
-    "permission_version": 1025
-  },
-  "request_id": "3d4e5f6a-7b8c-9d0e-1f2a-3b4c5d6e7f80",
-  "timestamp": "2025-06-01T10:00:00+08:00"
-}
-```
-
-_响应（角色互斥冲突）_
-
-```json
-{
-  "code": 3001,
-  "message": "角色互斥冲突：R_SAFETY_OFFICER 与 R_QUALITY_INSPECTOR 不可同时授予",
-  "data": { "conflict_role_ids": ["R_SAFETY_OFFICER", "R_QUALITY_INSPECTOR"] },
-  "request_id": "3d4e5f6a-7b8c-9d0e-1f2a-3b4c5d6e7f80",
-  "timestamp": "2025-06-01T10:00:00+08:00"
-}
-```
-
-==== 5.4 离职封存
-
-_请求_
-
-```http
-PATCH /api/v1/admin/users/U10086/status
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-Content-Type: application/json
-Idempotency-Key: 4e5f6a7b-8c9d-0e1f-2a3b-4c5d6e7f8091
-
-{
-  "target_status": "sealed",
-  "reason": "员工离职（HR 事件 HR20250601-001）",
-  "version": 7
-}
-```
-
-_响应_
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "user_id": "U10086",
-    "account_status": "sealed",
-    "sealed_at": "2025-06-01T11:00:00+08:00",
-    "revoked_tokens": 3,
-    "unbound_role_ids": ["R_SAFETY_OFFICER", "R_PROJECT_MANAGER"],
-    "unbound_data_scope_ids": ["DS_20250101_0001"],
-    "permission_version": 1026,
-    "audit_log_id": "AL_20250601_0001"
-  },
-  "request_id": "5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f809102",
-  "timestamp": "2025-06-01T11:00:00+08:00"
-}
-```
-
-说明：封存保留账号与日志，不做物理删除；解绑业务角色与数据权限；吊销全部令牌；发布 `sealed` 变更事件。
-
-==== 5.5 查询审计日志
-
-_请求_
-
-```http
-GET /api/v1/admin/audit-logs?start_time=2025-06-01T00:00:00%2B08:00&end_time=2025-06-01T23:59:59%2B08:00&username=zhangsan&operation_type=grant&success=true&page=1&page_size=20
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-```
-
-_响应_
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "total": 2,
-    "page": 1,
-    "page_size": 20,
-    "list": [
-      {
-        "log_id": "AL_20250601_0001",
-        "operation_time": "2025-06-01T10:00:00+08:00",
-        "operation_content": "授予用户 U10086 角色 R_SAFETY_OFFICER、R_PROJECT_MANAGER",
-        "username": "zhangsan",
-        "success": true,
-        "client_ip": "10.20.30.40",
-        "request_id": "3d4e5f6a-7b8c-9d0e-1f2a-3b4c5d6e7f80",
-        "detail": { "grant_id": "G_20250601_0001", "role_ids": ["R_SAFETY_OFFICER", "R_PROJECT_MANAGER"] }
-      },
-      {
-        "log_id": "AL_20250601_0002",
-        "operation_time": "2025-06-01T10:05:12+08:00",
-        "operation_content": "查询审计日志（关键词=权限变更，时间范围=2025-06-01）",
-        "username": "lisi",
-        "success": true,
-        "client_ip": "10.20.31.45",
-        "request_id": "7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f",
-        "detail": { "keyword": "权限变更" }
-      }
-    ]
+    "accessToken": "eyJhbGciOiJIUzM4NCJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 7200,
+    "userId": "1",
+    "displayName": "系统管理员",
+    "accountStatus": "NORMAL",
+    "refreshToken": null
   }
 }
-```
+----
 
-'''
+=== 7.2 创建用户并授予角色
 
-=== 第6章 安全与限流
+[source,bash]
+----
+curl -X POST http://localhost:8080/api/v1/users -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode userNo=zhang --data-urlencode password=Zhang@123 \
+  --data-urlencode realName=张三 --data-urlencode phone=13812345678 --data-urlencode orgId=1
 
-==== 6.1 接口鉴权处理顺序
+curl -X POST http://localhost:8080/api/v1/roles/grants -H "Authorization: Bearer $TOKEN" \
+  -d userId=2 -d roleId=2
+----
 
-统一权限平台作为公司级 IAM，对 18 套业务系统的每一次受保护 API 调用，均在后端执行_串行、短路_的四级校验。任一级失败立即返回错误并终止后续校验，不泄露后续校验信息。
+[source,json]
+----
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 2, "userId": 2, "roleId": 2,
+    "effectiveTime": "2026-10-24T16:13:19.325099", "expireTime": null,
+    "status": "ACTIVE"
+  }
+}
+----
 
-[cols="1,1,1,1"]
-|===
-| 顺序 | 校验环节 | 校验内容 | 失败返回
+=== 7.3 鉴权生效过程
 
-| ① | 令牌校验 | SSO 令牌/接口鉴权令牌的签名、有效期、签发方、是否在吊销名单 | 401 未认证
+. 角色 2 尚未绑定功能点时，用户 zhang 调用 `GET /users` → 403，`{"code": 2007, "message": "无功能权限: 查询用户列表"}`。
+. 管理员调用 `POST /systems/role-functions?roleId=2&allowedAction=VIEW`，请求体 `[20001]`。
+. zhang 再次调用 `GET /users` → 200；调用 `POST /users` 仍为 403（未绑定 20002）。
+. `GET /open/permissions?userId=2&systemCode=ADMIN` → `[20001]`。
+. 管理员把 zhang 封存（`PUT /users/2/status`，`targetStatus=SEALED`）→ zhang 的令牌立即失效，再请求返回 `{"code": 2004, "message": "令牌已吊销"}`。
 
-| ② | 账号状态 | 账号是否存在、是否被封存（离职禁用）、是否锁定 | 403 账号不可用
-
-| ③ | 功能权限 | 该账号对目标系统/菜单/按钮/API 是否具备功能权限（RBAC0 角色—权限映射） | 403 无功能权限
-
-| ④ | 数据范围 | 请求中的数据范围（分公司/部门/项目/本人）是否落在该账号被授予的数据权限内 | 403 越权访问
-|===
-
-设计要点：
-
-* _短路拒绝_：①失败不再校验②③④，避免对无效令牌做多余查询，也避免通过错误码差异探测系统内部结构。
-* _统一错误码_：对外仅暴露 401/403 两类语义，详细原因仅写入审计日志，不返回给调用方。
-* _校验前置_：鉴权在业务逻辑执行前完成，业务代码不得自行绕过；平台以统一网关/拦截器方式强制注入，业务系统无"跳过鉴权"开关。
-* _数据范围二次校验_：功能权限通过后，仍需对请求参数中的组织/项目标识做数据范围比对，防止"有功能权限但越范围取数"。
-
-==== 6.2 垂直/水平越权防护
-
-_垂直越权（低权限角色调用高权限接口）防护：_
-
-* 功能权限以"系统—菜单—按钮/API"三级资源为粒度授予，接口与权限点一一绑定，不做"角色名硬编码判断"。
-* 所有写接口与敏感查询接口在服务端强制校验权限点，前端菜单/按钮的 enable/disable 仅作体验优化，不作为安全边界。
-* 系统管理员权限与业务权限分离，系统管理员不默认拥有业务数据查看权，避免"运维即全权"。
-* 高危操作（授权变更、角色调整、账号封存）单独设权限点，并强制二次确认与审计。
-
-_水平越权（同角色访问他人/他部门数据）防护：_
-
-* 数据权限维度包括：分公司、部门、项目经理部、项目、本人。请求中的组织/项目标识必须与账号被授予的数据范围求交，越界即拒绝。
-* "本人"类权限（查看本人、查看/编辑本人）在服务端以当前登录账号身份回填过滤条件，_不接受前端传入的用户标识_，防止伪造他人 ID。
-* 列表查询与详情查询使用同一套数据范围过滤逻辑，避免"列表过滤、详情漏过滤"的常见漏洞。
-* 安全员、预算员、质检员等岗位的数据可见范围差异，通过数据权限配置实现，不写死在代码中。
-
-==== 6.3 限流策略
-
-平台按三个维度限流，超限返回 429 并记录审计日志。阈值建议如下（可按实际压测调整）：
-
-[cols="1,1,1,1"]
-|===
-| 维度 | 限流对象 | 建议阈值 | 说明
-
-| 按用户 | 单账号 | 查询类 20 次/秒；写操作 5 次/秒 | 防止单账号脚本刷接口
-
-| 按 IP | 单一来源 IP | 100 次/秒 | 防止单点异常流量；NAT 出口可适当放宽
-
-| 按调用方业务系统 | 单个业务系统（client_id） | 500 次/秒（可配置） | 保护平台自身，防止某套系统异常拖垮全局
-|===
-
-补充规则：
-
-* 令牌申请（登录/换取令牌）接口单独限流，按 IP + 账号双维度，防止暴力破解。
-* 限流采用令牌桶/滑动窗口，阈值支持配置化，无需重启生效。
-* 触发限流时返回统一错误码与 `Retry-After` 提示，不暴露内部限流实现细节。
-
-==== 6.4 审计要求
-
-_每个写接口（新增、修改、删除、授权、封存、解绑等）必须落审计日志，且失败操作同样记录。_ 审计日志永久保存，不提供删除入口。
-
-审计日志必备字段：
-
-[cols="1,1"]
-|===
-| 字段 | 说明
-
-| log_id | 日志唯一标识
-
-| oper_time | 操作时间（精确到毫秒，统一时区）
-
-| oper_user | 操作账号
-
-| oper_user_name | 操作人姓名（脱敏展示）
-
-| oper_action | 操作动作（新增/修改/删除/授权/查询/登录等）
-
-| oper_content | 操作内容描述（含关键参数，敏感字段脱敏）
-
-| target_system | 目标业务系统
-
-| target_resource | 目标资源/接口
-
-| result | 成功与否（SUCCESS/FAIL）
-
-| fail_reason | 失败原因（仅失败时记录，含鉴权失败级别）
-
-| client_ip | 来源 IP
-
-| duration_ms | 处理耗时
-
-| trace_id | 链路追踪标识，便于跨系统关联
-|===
-
-要求：
-
-* 审计写入与业务操作在同一事务边界内保证"操作发生即留痕"，审计失败不得导致业务静默成功。
-* 日志中的姓名、电话号码等敏感个人信息按脱敏规则存储与展示，原始值加密存储。
-* 审计日志支持按时间、账号、系统、结果等条件查询，查询行为本身亦记录审计。
-
-==== 6.5 结语
-
-本章明确了统一权限平台"先认证、再鉴权、后取数"的串行短路校验模型，从垂直与水平两个方向封堵越权风险，并以多维度限流与全量审计构成纵深防御。结合前文的 RBAC0 建模、双维度权限与人员生命周期管理，平台可在不重写各接入业务系统的前提下，为其提供一致、可审计、可追溯的统一身份与权限底座，满足万级人员规模下的安全合规与运维要求。
+文档结束。

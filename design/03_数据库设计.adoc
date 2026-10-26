@@ -10,13 +10,13 @@
 
 | 项目全称 | 统一应用软件权限管理系统（RBAC 统一身份与权限平台）
 
-| 文档版本 | V1.1
+| 文档版本 | V1.2
 
-| 修订说明 | V1.1（2026-10-26）：RBAC0 相关 8 张表与建表脚本 `src/main/resources/db/schema.sql`、JPA 实体逐字段对齐；新增 `password_hash`；第 5 章 DDL 改为实际建表脚本；新增初始化数据说明；嵌入 ER 图
+| 修订说明 | V1.2（2026-10-26）：按需求文档 V1.1 整理——第 1 章约定改为与实际表结构一致，后续阶段的设计标注实现阶段，新增第 7 章需求追踪。V1.1（2026-10-26）：RBAC0 相关 8 张表与建表脚本 `src/main/resources/db/schema.sql`、JPA 实体逐字段对齐；新增 `password_hash`；第 5 章 DDL 改为实际建表脚本；新增初始化数据说明；嵌入 ER 图
 
 | 编制单位 | 信息中心 / 系统架构组
 
-| 上游依据 | 《需求规格说明书（SRS）》V1.0、《概要/结构化设计说明书》V1.0
+| 上游依据 | 《需求规格说明书》V1.1、《详细设计说明书》V2.0
 
 | 适用阶段 | 详细设计阶段（课程期末大作业交付物）
 
@@ -71,15 +71,19 @@
 |===
 | 策略 | 说明
 
-| 通用审计字段 | 业务表统一含 `created_at`、`updated_at`、`created_by`、`updated_by`；`updated_at` 由 `ON UPDATE CURRENT_TIMESTAMP` 自动维护（应用层写入时也会显式赋值）
+| 时间字段 | 所有表含 `created_at`；会被修改的表另含 `updated_at`，由 `ON UPDATE CURRENT_TIMESTAMP` 自动维护（应用层写入时也显式赋值）。只追加的表（`iam_token` 除吊销外不修改、`iam_role_function`、`iam_role_exclusion`、两张日志表）不设 `updated_at`
 
-| 软删除 | 业务表统一含 `is_deleted tinyint(1) default 0`；删除即置 1，查询默认过滤 `is_deleted = 0`。**账号与日志不做物理删除**（FR-05、FR-45）
+| 操作人字段 | 由管理员维护的主数据表（`iam_user`、`iam_role`、`iam_org`）含 `created_by`、`updated_by`；关联表只记录授权人（`iam_user_role.grant_by`、`iam_role_function.created_by` 等）；接入登记表（`iam_system`、`iam_module`、`iam_function_point`）暂不记录操作人，由审计日志追溯（RBAC3）
+
+| 软删除 | 主数据表（`iam_user`、`iam_role`、`iam_org`、`iam_system`、`iam_module`、`iam_function_point`）含 `is_deleted tinyint`，删除即置 1，查询过滤 `is_deleted = 0`。*账号与日志不做物理删除*（FR-05、FR-45）
+
+| 关联表的回收 | `iam_user_role` 不软删除，用 `status` 表示 `ACTIVE / EXPIRED / REVOKED`，回收后再授予复用原记录；`iam_role_function` 解绑时物理删除该行——绑定关系本身不需要保留历史，变更历史由 `iam_permission_change_log` 记录（RBAC3）
 
 | 账号封存 | 通过 `account_status = 'SEALED'` 表达，不删除记录；`is_deleted` 仅用于误建账号的纠错
 
-| 审计日志 | `iam_audit_log` **只追加**：不设 `updated_at`、不设 `is_deleted`，通过触发器禁止 UPDATE/DELETE（见 4.3）
+| 审计日志 | `iam_audit_log` *只追加*：不设 `updated_at`、不设 `is_deleted`，禁止 UPDATE / DELETE（见 4.3，RBAC3 阶段）
 
-| 权限变更快照 | `iam_permission_change_log` 只追加，记录变更前后 JSON 快照，支持追溯（FR-42）
+| 权限变更快照 | `iam_permission_change_log` 只追加，记录变更前后 JSON 快照，支持追溯（FR-42，RBAC3 阶段）
 |===
 
 === 1.5 敏感字段加密说明
@@ -90,7 +94,7 @@
 
 | `iam_user.password_hash` | PBKDF2-HMAC-SHA256，16 字节随机盐，65536 次迭代，256 位输出 | 格式 `Base64(盐):Base64(哈希)`；不存明文、不可逆；校验时常量时间比较，防时序攻击
 
-| `iam_user.name_enc` | AES-256-GCM（或国密 SM4）密文，Base64 编码 | 加密姓名；另存 `name_hash`（HMAC-SHA256）用于等值检索与去重
+| `iam_user.name_enc` | AES-256-GCM（或国密 SM4）密文，Base64 编码 | 加密姓名；另存 `name_hash` 用于等值检索与去重
 
 | `iam_user.phone_enc` | 同上 | 加密电话；另存 `phone_hash` 用于等值检索
 
@@ -98,7 +102,7 @@
 
 | 展示脱敏 | 应用层（M11 加密脱敏组件）按规则遮蔽：姓名保留姓氏（`张*`）、电话中间四位掩码（`138****5678`） | 明文查看需授权并记录审计日志（FR-49、FR-50）
 
-| 检索 | 密文字段不可直接 LIKE 查询；等值查询走 `name_hash`/`phone_hash` | 模糊查询需在应用层解密后过滤或引入专用检索方案
+| 检索哈希 | `name_hash`、`phone_hash`、`iam_token.token_hash` 为 SHA-256(原文 + 密钥) 的十六进制串（带密钥的哈希，可防止离线撞库；不是标准 HMAC，后续可替换为 HMAC-SHA256） | 密文字段不可直接 LIKE 查询；等值查询走哈希字段。RBAC0 未提供按姓名 / 电话检索的接口，因此暂未给这两个哈希字段建索引
 |===
 
 说明：`name_enc`、`phone_enc` 字段类型为 `varbinary(512)`（存密文二进制）或 `varchar(512)`（存 Base64 密文）。本设计采用 `varchar(512)` 便于跨语言与运维排查，密文长度按 AES-GCM 最大明文 128 字节估算。
@@ -265,11 +269,11 @@ image::ER图.png[ER 图,width=100%]
 
 | name_enc | varchar(512) | 否 |  | **加密姓名**（密文）
 
-| name_hash | varchar(64) | 是 |  | 姓名 HMAC-SHA256，用于等值检索
+| name_hash | varchar(64) | 是 |  | 姓名检索哈希（见 1.5）
 
 | phone_enc | varchar(512) | 是 |  | **加密电话**（密文）
 
-| phone_hash | varchar(64) | 是 |  | 电话 HMAC-SHA256，用于等值检索
+| phone_hash | varchar(64) | 是 |  | 电话检索哈希（见 1.5）
 
 | org_id | bigint | 否 | FK→iam_org.id | 所属组织
 
@@ -664,14 +668,20 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 * 代价：数据库不再兜底，必须保证所有写入都经过应用层校验，不允许绕过应用直接改库。
 * 审计日志表、变更快照表本来就不关联主数据，保留快照语义，主数据封存不影响历史日志。
 
-=== 4.3 审计日志只追加约束
+=== 4.3 审计日志只追加约束（RBAC3 阶段）
+
+以下措施在实现审计日志时落地，当前 `schema.sql` 尚未包含触发器：
+
 
 . _触发器_：在 `iam_audit_log` 上创建 `BEFORE UPDATE` 与 `BEFORE DELETE` 触发器，直接 `SIGNAL SQLSTATE '45000'` 拒绝。
 . _权限控制_：应用连接账号仅授予 `INSERT`、`SELECT` 权限，不授予 `UPDATE`、`DELETE`。
 . _归档_：按时间分区或定期归档至对象存储，归档表同样只读；归档不改变"永久保存"属性（NFR-10）。
 . _防篡改_：可选对 `detail` 与关键字段计算哈希链（前一条日志哈希入下一条），增强不可抵赖性。
 
-=== 4.4 缓存说明（Redis 不建表）
+=== 4.4 缓存说明（Redis 不建表，RBAC3 阶段）
+
+RBAC0 鉴权每次实时查库、不使用缓存（见《详细设计说明书》7.3）。以下为启用缓存后的键设计：
+
 
 * 权限快照缓存：key `iam:perm:{userId}:{systemCode}:{permVersion}`，TTL 短（如 5 分钟），变更事件递增 `permVersion` 使旧 key 失效（FR-40）。
 * 令牌会话缓存：key `iam:token:{tokenHash}`，TTL 与令牌有效期一致。
@@ -977,3 +987,57 @@ CREATE TABLE IF NOT EXISTS iam_token (
 |===
 
 说明：总公司（约 190 人）为根组织，下设职能部门（综合办公室、党委工作部、人力资源部、财务部、市场经营部、工程技术部、安全质量部、物资设备部、审计监察部、工会办公室等）；9 个分公司各下设职能部（综合办公室/财务部/工程技术部/安全质量部/物资设备部/市场经营部）及第一~第四项目经理部，合计 111 个部门，按多级树状结构导入 `iam_org`。信息中心对应"系统管理员"角色，负责本平台运维。
+
+== 7. 需求追踪
+
+按《需求规格说明书》检查每条与数据相关的需求在表结构上是否有落点。
+
+[cols="1,3,3,1"]
+|===
+| 需求 | 数据落点 | 说明 | 状态
+
+| FR-01 统一账号 | `iam_user`：`user_no` 唯一、`name_enc`/`phone_enc` 加密、`org_id`、`post` | — | 已实现
+
+| FR-02、FR-05 状态与封存 | `iam_user.account_status`、`leave_time`；封存时 `iam_user_role.status = REVOKED`、`iam_token.revoked = 1` | 不物理删除 | 已实现
+
+| FR-03、FR-04 入职、调岗 | `iam_user.org_id`、`post`；HR 事件不落表 | HR 事件契约为扩展 | 部分实现
+
+| FR-06 批量导入 | 复用 `iam_user` | 无需新表 | 扩展
+
+| FR-07 绑定关系查询 | `iam_user_role`、`iam_role_function`（索引见 4.5） | — | 部分实现
+
+| FR-08～FR-11 组织树 | `iam_org`：`parent_id` 自关联、`ancestors` 祖先路径、`org_type`/`org_level`；人数统计按 `iam_user.org_id` 聚合 | — | RBAC3 阶段
+
+| FR-12 角色定义 | `iam_role`：`role_code` 唯一、`role_type`、`status` | — | 已实现
+
+| FR-13 角色继承 | `iam_role.parent_id`（字段已预留，索引 `idx_role_parent`） | 成环校验在应用层 | RBAC1 阶段
+
+| FR-14 角色互斥 | `iam_role_exclusion`：`uk_role_excl(role_id, excluded_role_id)` | 双向落库 | RBAC3 阶段
+
+| FR-16 预置角色 | `seed.sql` 预置 `SUPER_ADMIN`；5 类基线角色见 6.2 | — | 部分实现
+
+| FR-17～FR-19 功能点与 API 映射 | `iam_system` → `iam_module` → `iam_function_point`（`action`、`api_path` + `api_method` 唯一） | — | 已实现
+
+| FR-22～FR-26 数据权限 | `iam_data_scope`、`iam_role_data_scope`（`scope_type`、`org_id`、`project_id`、`effective_time`/`expire_time`） | — | RBAC3 阶段
+
+| FR-25 临时授权 | 用户-角色：`iam_user_role.effective_time`/`expire_time`（已实现）；数据范围：`iam_role_data_scope` 同名字段 | — | 部分实现
+
+| FR-27、FR-28 授权与回收 | `iam_user_role`（`uk_user_role`）、`iam_role_function`（`uk_role_fp`） | — | 已实现
+
+| FR-30 审批流 | 无对应表 | 实现时新增申请单表 | 扩展
+
+| FR-32、FR-34 令牌签发与吊销 | `iam_token`：只存 `token_hash`，`revoked`/`revoked_at`/`status` | — | 已实现
+
+| FR-35 接入登记 | `iam_system`：`system_code` 唯一、`callback_url`、`public_key` | 对外签名所需的应用密钥字段在实现时增加 | 部分实现
+
+| FR-41 并发互斥 | 唯一约束防重复授权；分布式锁见 4.4 | 未设乐观锁 `version` 字段：授权写入以唯一约束 + 锁保证一致，不需要版本号 | 部分实现
+
+| FR-42 变更快照 | `iam_permission_change_log`：`before_snapshot`/`after_snapshot`（JSON） | — | RBAC3 阶段
+
+| FR-44～FR-47 审计日志 | `iam_audit_log`：`operate_time`、`action`、`username`、`success`（需求要求的四个必备字段）及 `target`、`ip`、`system_code`、`detail`、`decision_id`；只追加 | 本节字段为审计日志的唯一口径，API 文档引用此处 | RBAC3 阶段
+
+| FR-48～FR-50 加密与脱敏 | `name_enc`/`phone_enc` 加密、`*_hash` 检索、展示脱敏在应用层 | 见 1.5 | 部分实现
+
+| NFR-06 万级规模 | 主键自增、查询字段均有索引（4.5） | 未压测 | 部分实现
+|===
+
