@@ -10,7 +10,9 @@
 
 | 项目全称 | 统一应用软件权限管理系统（RBAC 统一身份与权限平台）
 
-| 文档版本 | V1.0
+| 文档版本 | V1.1
+
+| 修订说明 | V1.1（2026-10-26）：RBAC0 相关 8 张表与建表脚本 `src/main/resources/db/schema.sql`、JPA 实体逐字段对齐；新增 `password_hash`；第 5 章 DDL 改为实际建表脚本；新增初始化数据说明；嵌入 ER 图
 
 | 编制单位 | 信息中心 / 系统架构组
 
@@ -25,9 +27,9 @@
 
 '''
 
-=== 1. 设计约定
+== 1. 设计约定
 
-==== 1.1 命名规范
+=== 1.1 命名规范
 
 [cols="1,1,1"]
 |===
@@ -45,30 +47,31 @@
 
 | 普通索引 | `idx_<表简称>_<字段>` | `idx_user_org`
 
-| 外键约束 | `fk_<表简称>_<被引用表简称>` | `fk_user_org`
+| 外键约束 | 逻辑外键，不建物理约束（见 4.2） | `iam_user.org_id → iam_org.id`
 
-| 布尔字段 | `is_` 前缀，`tinyint(1)`，0/1 | `is_deleted`、`revoked`
+| 布尔字段 | `is_` 前缀或语义名，`tinyint`，0/1 | `is_deleted`、`revoked`
 |===
 
-==== 1.2 字符集与排序规则
+=== 1.2 字符集与排序规则
 
 * 数据库、表、字符字段统一 `utf8mb4`，排序规则 `utf8mb4_0900_ai_ci`（MySQL 8.0 默认，支持中文与 emoji）。
-* 存储引擎统一 `InnoDB`，支持事务与外键。
-* 时间字段统一 `datetime(3)`（毫秒精度），默认 `CURRENT_TIMESTAMP(3)`。
+* 存储引擎统一 `InnoDB`，支持事务与行级锁。
+* 时间字段统一 `datetime`（秒级精度，对应 Java `LocalDateTime`），默认 `CURRENT_TIMESTAMP`。
 
-==== 1.3 主键策略
+=== 1.3 主键策略
 
-* 采用 _BIGINT 自增主键_（`bigint unsigned auto_increment`），避免 UUID 造成的索引膨胀与页分裂；对外暴露时通过编码字段（`user_no`、`role_code`、`system_code`）而非主键。
-* 审计日志表 `iam_audit_log` 主键 `log_id` 采用 `bigint unsigned auto_increment`，保证只追加写入的顺序性。
+* 采用 _BIGINT 自增主键_（`bigint auto_increment`，有符号，与 Java `Long` 一一对应），避免 UUID 造成的索引膨胀与页分裂；对外暴露时通过编码字段（`user_no`、`role_code`、`system_code`）而非主键。
+* 例外：令牌表 `iam_token` 以 `token_id`（UUID 字符串）为主键，令牌本身只存哈希。
+* 审计日志表 `iam_audit_log` 主键 `log_id` 采用 `bigint auto_increment`，保证只追加写入的顺序性。
 * 关联表（`iam_user_role`、`iam_role_function`、`iam_role_data_scope`）采用自增 `id` 主键 + 业务唯一索引，便于扩展字段（有效期、授权人等）。
 
-==== 1.4 审计与软删除策略
+=== 1.4 审计与软删除策略
 
 [cols="1,1"]
 |===
 | 策略 | 说明
 
-| 通用审计字段 | 业务表统一含 `created_at`、`updated_at`、`created_by`、`updated_by`；`updated_at` 由 `ON UPDATE CURRENT_TIMESTAMP(3)` 自动维护
+| 通用审计字段 | 业务表统一含 `created_at`、`updated_at`、`created_by`、`updated_by`；`updated_at` 由 `ON UPDATE CURRENT_TIMESTAMP` 自动维护（应用层写入时也会显式赋值）
 
 | 软删除 | 业务表统一含 `is_deleted tinyint(1) default 0`；删除即置 1，查询默认过滤 `is_deleted = 0`。**账号与日志不做物理删除**（FR-05、FR-45）
 
@@ -79,17 +82,19 @@
 | 权限变更快照 | `iam_permission_change_log` 只追加，记录变更前后 JSON 快照，支持追溯（FR-42）
 |===
 
-==== 1.5 敏感字段加密说明
+=== 1.5 敏感字段加密说明
 
 [cols="1,1,1"]
 |===
 | 字段 | 存储方式 | 说明
 
+| `iam_user.password_hash` | PBKDF2-HMAC-SHA256，16 字节随机盐，65536 次迭代，256 位输出 | 格式 `Base64(盐):Base64(哈希)`；不存明文、不可逆；校验时常量时间比较，防时序攻击
+
 | `iam_user.name_enc` | AES-256-GCM（或国密 SM4）密文，Base64 编码 | 加密姓名；另存 `name_hash`（HMAC-SHA256）用于等值检索与去重
 
 | `iam_user.phone_enc` | 同上 | 加密电话；另存 `phone_hash` 用于等值检索
 
-| 密钥管理 | 密钥由独立 KMS/密钥管理服务托管，**禁止硬编码**（NFR-01） | 密文格式建议 `版本号:IV:密文:Tag`，支持密钥轮换
+| 密钥管理 | 目标：密钥由独立 KMS/密钥管理服务托管，**禁止硬编码**（NFR-01）。当前实现：读取 `application.yml` 的 `crypto.aes-key`，部署时须用环境变量覆盖 | 当前密文格式 `Base64(IV + 密文 + Tag)`；后续可加版本号前缀支持密钥轮换
 
 | 展示脱敏 | 应用层（M11 加密脱敏组件）按规则遮蔽：姓名保留姓氏（`张*`）、电话中间四位掩码（`138****5678`） | 明文查看需授权并记录审计日志（FR-49、FR-50）
 
@@ -98,11 +103,28 @@
 
 说明：`name_enc`、`phone_enc` 字段类型为 `varbinary(512)`（存密文二进制）或 `varchar(512)`（存 Base64 密文）。本设计采用 `varchar(512)` 便于跨语言与运维排查，密文长度按 AES-GCM 最大明文 128 字节估算。
 
+=== 1.6 实现阶段与表范围
+
+课程设计分三次检查逐步实现 RBAC0 → RBAC1 → RBAC3。本文档第 3 章给出全部 14 张表的目标设计，其中 **RBAC0 阶段已实现 8 张表**，与建表脚本 `schema.sql`、JPA 实体完全一致，并已在 MySQL 8.0 上导入验证。
+
+[cols="1,2,1"]
+|===
+| 阶段 | 表 | 状态
+
+| RBAC0（第一次检查） | `iam_user`、`iam_role`、`iam_user_role`、`iam_system`、`iam_module`、`iam_function_point`、`iam_role_function`、`iam_token` | 已实现
+
+| RBAC1（角色继承） | `iam_role.parent_id`（字段已预留） | 待实现
+
+| RBAC3（约束 + 数据权限 + 审计） | `iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope`、`iam_audit_log`、`iam_permission_change_log` | 待实现，实现时同步更新 `schema.sql`
+|===
+
+RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` ↔ `iam_user_role` ↔ `iam_role` ↔ `iam_role_function` ↔ `iam_function_point`。`iam_system → iam_module → iam_function_point` 用于把功能点归属到接入系统，`iam_token` 记录登录令牌以支持登出与吊销。
+
 '''
 
-=== 2. 概念模型说明（供 ER 图绘制）
+== 2. 概念模型说明（供 ER 图绘制）
 
-==== 2.1 实体清单
+=== 2.1 实体清单
 
 [cols="1,1,1,1"]
 |===
@@ -139,7 +161,9 @@
 
 缓存（Redis）不建表，见 4.4 说明。
 
-==== 2.2 实体关系与基数
+各实体的实现阶段见 1.6。
+
+=== 2.2 实体关系与基数
 
 [cols="1,1,1,1"]
 |===
@@ -176,26 +200,29 @@
 | R15 | 数据范围字典 1:N 角色-数据范围授权 | 1:N | 字典项被多次引用
 |===
 
-==== 2.3 ER 图绘制要点
+=== 2.3 ER 图绘制要点
 
 * 以 `iam_user`、`iam_role`、`iam_function_point` 为三个核心实体，`iam_user_role`、`iam_role_function`、`iam_role_data_scope` 为三张关联表。
 * `iam_org` 为自关联树，`iam_role` 为自关联继承树，`iam_role_exclusion` 为角色自关联的 M:N 互斥边。
 * `iam_system → iam_module → iam_function_point` 为三级 1:N 链。
 * `iam_audit_log`、`iam_permission_change_log` 为只追加的弱依赖实体（不设外键强约束，保留快照字段）。
 
+.统一应用软件权限管理系统 ER 图（全部 14 个实体，图中仅列关键字段，完整字段见第 3 章）
+image::ER图.png[ER 图,width=100%]
+
 '''
 
-=== 3. 逻辑表结构清单
+== 3. 逻辑表结构清单
 
-==== 3.1 iam_org 组织机构
+=== 3.1 iam_org 组织机构（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| parent_id | bigint unsigned | 是 | FK→iam_org.id | 上级组织；根节点为 NULL
+| parent_id | bigint | 是 | FK→iam_org.id | 上级组织；根节点为 NULL
 
 | ancestors | varchar(500) | 否 |  | 祖先路径，逗号分隔 ID，如 `0,1,12`，便于子树查询
 
@@ -207,69 +234,71 @@
 
 | org_level | tinyint | 否 |  | 层级：1 总公司 / 2 分公司 / 3 部门 / 4 项目部
 
-| leader_user_id | bigint unsigned | 是 | FK→iam_user.id | 负责人
+| leader_user_id | bigint | 是 | FK→iam_user.id | 负责人
 
 | sort_no | int | 否 |  | 同级排序
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE 正常 / DISABLED 停用
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记
+| is_deleted | tinyint | 否 |  | 软删除标记
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 
-| created_by | bigint unsigned | 是 |  | 创建人
+| created_by | bigint | 是 |  | 创建人
 
-| updated_by | bigint unsigned | 是 |  | 更新人
+| updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.2 iam_user 账号/员工
+=== 3.2 iam_user 账号/员工（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| user_no | varchar(32) | 否 | UK | 工号，唯一
+| user_no | varchar(32) | 否 | UK | 账号/工号，唯一，即登录名
+
+| password_hash | varchar(128) | 否 |  | 登录密码哈希（PBKDF2，见 1.5）
 
 | name_enc | varchar(512) | 否 |  | **加密姓名**（密文）
 
-| name_hash | char(64) | 是 |  | 姓名 HMAC-SHA256，用于等值检索
+| name_hash | varchar(64) | 是 |  | 姓名 HMAC-SHA256，用于等值检索
 
 | phone_enc | varchar(512) | 是 |  | **加密电话**（密文）
 
-| phone_hash | char(64) | 是 |  | 电话 HMAC-SHA256，用于等值检索
+| phone_hash | varchar(64) | 是 |  | 电话 HMAC-SHA256，用于等值检索
 
-| org_id | bigint unsigned | 否 | FK→iam_org.id | 所属组织
+| org_id | bigint | 否 | FK→iam_org.id | 所属组织
 
 | post | varchar(64) | 是 |  | 岗位（安全员/预算员/质检员等）
 
 | account_status | varchar(16) | 否 |  | 状态：NORMAL 正常 / DISABLED 停用 / SEALED 封存 / LOCKED 锁定
 
-| leave_time | datetime(3) | 是 |  | 离职时间（封存时写入）
+| leave_time | datetime | 是 |  | 离职时间（封存时写入）
 
-| last_login_at | datetime(3) | 是 |  | 最近登录时间
+| last_login_at | datetime | 是 |  | 最近登录时间
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记（账号不物理删除）
+| is_deleted | tinyint | 否 |  | 软删除标记（账号不物理删除）
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 
-| created_by | bigint unsigned | 是 |  | 创建人
+| created_by | bigint | 是 |  | 创建人
 
-| updated_by | bigint unsigned | 是 |  | 更新人
+| updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.3 iam_role 角色
+=== 3.3 iam_role 角色（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
 | role_code | varchar(64) | 否 | UK | 角色编码
 
@@ -277,78 +306,80 @@
 
 | role_type | varchar(16) | 否 |  | 类型：FUNC 功能角色 / DATA 岗位型数据角色
 
-| parent_id | bigint unsigned | 是 | FK→iam_role.id | 父角色（继承），根为 NULL
+| parent_id | bigint | 是 | FK→iam_role.id | 父角色（继承，RBAC1 启用），RBAC0 恒为 NULL
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / DISABLED
 
 | description | varchar(500) | 是 |  | 描述
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记
+| is_deleted | tinyint | 否 |  | 软删除标记
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 
-| created_by | bigint unsigned | 是 |  | 创建人
+| created_by | bigint | 是 |  | 创建人
 
-| updated_by | bigint unsigned | 是 |  | 更新人
+| updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.4 iam_role_exclusion 角色互斥
+=== 3.4 iam_role_exclusion 角色互斥（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| role_id | bigint unsigned | 否 | FK→iam_role.id | 角色 A
+| role_id | bigint | 否 | FK→iam_role.id | 角色 A
 
-| excluded_role_id | bigint unsigned | 否 | FK→iam_role.id | 互斥角色 B
+| excluded_role_id | bigint | 否 | FK→iam_role.id | 互斥角色 B
 
 | description | varchar(255) | 是 |  | 互斥原因（如会计与出纳）
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| created_by | bigint unsigned | 是 |  | 创建人
+| created_by | bigint | 是 |  | 创建人
 |===
 
 互斥关系对称，写入时同时落 `(A,B)` 与 `(B,A)` 两条，或查询时双向匹配；本设计采用双向落库 + 唯一约束 `(role_id, excluded_role_id)`。
 
-==== 3.5 iam_user_role 用户-角色绑定
+=== 3.5 iam_user_role 用户-角色绑定（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| user_id | bigint unsigned | 否 | FK→iam_user.id | 用户
+| user_id | bigint | 否 | FK→iam_user.id | 用户
 
-| role_id | bigint unsigned | 否 | FK→iam_role.id | 角色
+| role_id | bigint | 否 | FK→iam_role.id | 角色
 
-| effective_time | datetime(3) | 是 |  | 生效时间（临时授权）
+| effective_time | datetime | 是 |  | 生效时间（临时授权）
 
-| expire_time | datetime(3) | 是 |  | 失效时间；NULL 表示长期
+| expire_time | datetime | 是 |  | 失效时间；NULL 表示长期
 
-| grant_by | bigint unsigned | 是 |  | 授权人
+| grant_by | bigint | 是 |  | 授权人
 
 | grant_reason | varchar(255) | 是 |  | 授权原因
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / EXPIRED / REVOKED
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 |===
 
-==== 3.6 iam_system 业务接入系统
+唯一约束 `(user_id, role_id)`：同一用户同一角色只保留一行；撤销时置 `REVOKED`，再次授予时复用该行并恢复为 `ACTIVE`。
+
+=== 3.6 iam_system 业务接入系统（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
 | system_code | varchar(64) | 否 | UK | 系统编码（如 OA、PMIS）
 
@@ -362,22 +393,22 @@
 
 | description | varchar(500) | 是 |  | 描述
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记
+| is_deleted | tinyint | 否 |  | 软删除标记
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 |===
 
-==== 3.7 iam_module 功能模块
+=== 3.7 iam_module 功能模块（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| system_id | bigint unsigned | 否 | FK→iam_system.id | 所属系统
+| system_id | bigint | 否 | FK→iam_system.id | 所属系统
 
 | module_code | varchar(64) | 否 |  | 模块编码
 
@@ -387,22 +418,22 @@
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / DISABLED
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记
+| is_deleted | tinyint | 否 |  | 软删除标记
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 |===
 
-==== 3.8 iam_function_point 功能点
+=== 3.8 iam_function_point 功能点（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| module_id | bigint unsigned | 否 | FK→iam_module.id | 所属模块
+| module_id | bigint | 否 | FK→iam_module.id | 所属模块
 
 | point_code | varchar(64) | 否 |  | 功能点编码
 
@@ -410,51 +441,51 @@
 
 | action | varchar(64) | 否 |  | 操作取值集合（见 3.8.1）
 
-| api_path | varchar(255) | 是 |  | API 路径
+| api_path | varchar(255) | 是 |  | API 映射模板（如 `/users/{userId}`），鉴权拦截器按此匹配
 
 | api_method | varchar(16) | 是 |  | HTTP 方法（GET/POST/PUT/DELETE）
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / DISABLED
 
-| is_deleted | tinyint(1) | 否 |  | 软删除标记
+| is_deleted | tinyint | 否 |  | 软删除标记
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| updated_at | datetime(3) | 否 |  | 更新时间
+| updated_at | datetime | 否 |  | 更新时间
 |===
 
 _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）、`VIEW`（查看）、`ALL`（全部）、`VIEW_EDIT`（查看/编辑）、`VIEW_ADD`（查看/新增）、`VIEW_APPROVE`（查看/审批）、`VIEW_EXPORT`（查看/导出）、`VIEW_EDIT_APPROVE`（查看/编辑/审批）、`VIEW_ADD_EDIT`（查看/新增/编辑）、`VIEW_EDIT_EXPORT`（查看/编辑/导出）、`VIEW_SELF`（查看本人）、`VIEW_EDIT_SELF`（查看/编辑本人）。
 
-说明：`action` 字段描述功能点**支持的操作集合**；实际授权时 `iam_role_function.allowed_action` 记录角色被授予的具体操作（可为集合的子集，以逗号分隔或单值，本设计采用单值 + 多行表达多操作）。
+说明：`action` 字段描述功能点**支持的操作**；实际授权时 `iam_role_function.allowed_action` 记录角色被授予的操作，取 12 种之一（单值）。
 
-==== 3.9 iam_role_function 角色-功能权限
+=== 3.9 iam_role_function 角色-功能权限（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| role_id | bigint unsigned | 否 | FK→iam_role.id | 角色
+| role_id | bigint | 否 | FK→iam_role.id | 角色
 
-| function_point_id | bigint unsigned | 否 | FK→iam_function_point.id | 功能点
+| function_point_id | bigint | 否 | FK→iam_function_point.id | 功能点
 
 | allowed_action | varchar(64) | 否 |  | 授予的操作（12 种取值之一）
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| created_by | bigint unsigned | 是 |  | 授权人
+| created_by | bigint | 是 |  | 授权人
 |===
 
-唯一约束 `(role_id, function_point_id, allowed_action)`，同一角色对同一功能点可授予多个操作（多行）。
+唯一约束 `(role_id, function_point_id)`：同一角色对同一功能点只绑定一次，重复绑定在应用层跳过。
 
-==== 3.10 iam_data_scope 数据范围字典
+=== 3.10 iam_data_scope 数据范围字典（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
 | scope_code | varchar(32) | 否 | UK | 编码：ALL / BRANCH / DEPT / PROJECT / SELF
 
@@ -466,37 +497,37 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / DISABLED
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 |===
 
-==== 3.11 iam_role_data_scope 角色-数据范围授权
+=== 3.11 iam_role_data_scope 角色-数据范围授权（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| id | bigint unsigned | 否 | PK | 主键
+| id | bigint | 否 | PK | 主键
 
-| role_id | bigint unsigned | 否 | FK→iam_role.id | 角色
+| role_id | bigint | 否 | FK→iam_role.id | 角色
 
 | scope_type | varchar(32) | 否 | FK→iam_data_scope.scope_code | 数据范围类型
 
-| org_id | bigint unsigned | 是 | FK→iam_org.id | 绑定组织（本分公司/本部门时使用）
+| org_id | bigint | 是 | FK→iam_org.id | 绑定组织（本分公司/本部门时使用）
 
-| project_id | bigint unsigned | 是 | FK→iam_org.id | 绑定项目（本项目时使用，指向 org_type=PROJECT 节点）
+| project_id | bigint | 是 | FK→iam_org.id | 绑定项目（本项目时使用，指向 org_type=PROJECT 节点）
 
-| effective_time | datetime(3) | 是 |  | 生效时间（临时授权）
+| effective_time | datetime | 是 |  | 生效时间（临时授权）
 
-| expire_time | datetime(3) | 是 |  | 失效时间
+| expire_time | datetime | 是 |  | 失效时间
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 
-| created_by | bigint unsigned | 是 |  | 授权人
+| created_by | bigint | 是 |  | 授权人
 |===
 
 唯一约束 `(role_id, scope_type, org_id, project_id)`；`org_id`/`project_id` 可空，按 `scope_type` 语义使用。
 
-==== 3.12 iam_token 令牌
+=== 3.12 iam_token 令牌（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -504,44 +535,44 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 | token_id | varchar(64) | 否 | PK | 令牌 ID（非令牌明文）
 
-| user_id | bigint unsigned | 否 | FK→iam_user.id | 用户
+| user_id | bigint | 否 | FK→iam_user.id | 用户
 
 | system_code | varchar(64) | 否 | FK→iam_system.system_code | 受众系统
 
-| token_hash | char(64) | 否 |  | 令牌哈希（不存明文）
+| token_hash | varchar(64) | 否 |  | 令牌哈希（不存明文）
 
-| issued_at | datetime(3) | 否 |  | 签发时间
+| issued_at | datetime | 否 |  | 签发时间
 
-| expire_at | datetime(3) | 否 |  | 过期时间
+| expire_at | datetime | 否 |  | 过期时间
 
-| revoked | tinyint(1) | 否 |  | 是否吊销
+| revoked | tinyint | 否 |  | 是否吊销
 
-| revoked_at | datetime(3) | 是 |  | 吊销时间
+| revoked_at | datetime | 是 |  | 吊销时间
 
 | status | varchar(16) | 否 |  | 状态：ACTIVE / EXPIRED / REVOKED
 
 | client_ip | varchar(64) | 是 |  | 签发 IP
 
-| created_at | datetime(3) | 否 |  | 创建时间
+| created_at | datetime | 否 |  | 创建时间
 |===
 
-==== 3.13 iam_audit_log 审计日志（只追加、永久保存）
+=== 3.13 iam_audit_log 审计日志（只追加、永久保存）（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| log_id | bigint unsigned | 否 | PK | 主键，自增
+| log_id | bigint | 否 | PK | 主键，自增
 
-| user_id | bigint unsigned | 是 |  | 操作人 ID（系统事件可空）
+| user_id | bigint | 是 |  | 操作人 ID（系统事件可空）
 
 | username | varchar(128) | 是 |  | 操作人用户名快照（脱敏后）
 
 | action | varchar(128) | 否 |  | 操作内容/动作
 
-| operate_time | datetime(3) | 否 |  | 操作时间
+| operate_time | datetime | 否 |  | 操作时间
 
-| success | tinyint(1) | 否 |  | 操作成功与否（1 成功 / 0 失败）
+| success | tinyint | 否 |  | 操作成功与否（1 成功 / 0 失败）
 
 | target | varchar(255) | 是 |  | 操作对象（如角色 ID、功能点 ID）
 
@@ -556,17 +587,17 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 无 `updated_at`、无 `is_deleted`；通过触发器禁止 UPDATE/DELETE（见 4.3）。
 
-==== 3.14 iam_permission_change_log 权限变更快照
+=== 3.14 iam_permission_change_log 权限变更快照（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
 | 字段名 | 类型 | 可空 | 主键/外键 | 说明
 
-| change_id | bigint unsigned | 否 | PK | 主键
+| change_id | bigint | 否 | PK | 主键
 
-| user_id | bigint unsigned | 是 |  | 受影响用户（角色级变更可空）
+| user_id | bigint | 是 |  | 受影响用户（角色级变更可空）
 
-| role_id | bigint unsigned | 是 |  | 受影响角色（用户级变更可空）
+| role_id | bigint | 是 |  | 受影响角色（用户级变更可空）
 
 | change_type | varchar(32) | 否 |  | 类型：GRANT / REVOKE / SEAL / ROLE_UPDATE / SCOPE_UPDATE
 
@@ -574,9 +605,9 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 | after_snapshot | json | 是 |  | 变更后快照
 
-| operator | bigint unsigned | 是 |  | 操作人
+| operator | bigint | 是 |  | 操作人
 
-| changed_at | datetime(3) | 否 |  | 变更时间
+| changed_at | datetime | 否 |  | 变更时间
 
 | remark | varchar(500) | 是 |  | 备注
 |===
@@ -585,9 +616,9 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 '''
 
-=== 4. 关键约束与索引
+== 4. 关键约束与索引
 
-==== 4.1 唯一约束
+=== 4.1 唯一约束
 
 [cols="1,1,1"]
 |===
@@ -605,13 +636,13 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 | iam_system | `uk_system_code(system_code)` | 系统编码唯一
 
-| iam_module | `uk_module(system_id, module_code)` | 系统内模块编码唯一
+| iam_module | `uk_module_code(system_id, module_code)` | 系统内模块编码唯一
 
 | iam_function_point | `uk_fp_api(api_path, api_method)` | 功能点 API 唯一（FR-19）
 
 | iam_function_point | `uk_fp_code(module_id, point_code)` | 模块内功能点编码唯一
 
-| iam_role_function | `uk_role_fp(role_id, function_point_id, allowed_action)` | 授权不重复
+| iam_role_function | `uk_role_fp(role_id, function_point_id)` | 同一角色对同一功能点只绑定一次
 
 | iam_data_scope | `uk_scope_code(scope_code)` | 范围编码唯一
 
@@ -620,400 +651,243 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 | iam_token | `uk_token_hash(token_hash)` | 令牌哈希唯一
 |===
 
-==== 4.2 外键策略
+说明：`iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope` 的约束属于后续阶段，实现时加入 `schema.sql`。
 
-* 业务表之间建立外键，`ON DELETE RESTRICT`、`ON UPDATE CASCADE`，防止误删主数据。
-* 审计日志表 `iam_audit_log`、变更快照表 `iam_permission_change_log` _不建外键_（保留快照语义，避免主数据删除/封存影响历史日志）。
-* `iam_user_role`、`iam_role_function`、`iam_role_data_scope` 对 `user_id`/`role_id`/`function_point_id` 建外键，保证引用完整性。
-* 账号封存（`account_status=SEALED`）不删除记录，外键不受影响。
+=== 4.2 外键策略
 
-==== 4.3 审计日志只追加约束
+* **不建物理外键，采用逻辑外键**：第 3 章中的 `FK→` 表示逻辑引用关系，`schema.sql` 不创建 `FOREIGN KEY` 约束。
+* 引用完整性由应用层保证：每个写操作在 Service 中先校验被引用记录存在且有效，例如授予角色前校验用户存在且状态正常、角色存在且为 `ACTIVE`；绑定功能权限前校验角色与每个功能点都存在。
+* 理由：
+** 题目要求高负载、大并发。物理外键会在每次写入时额外检查并加锁被引用行，增加锁竞争。
+** 业务数据统一软删除（`is_deleted`），物理外键的级联删除用不上，反而妨碍批量导入和数据修复。
+** 便于后续按业务分库，外键无法跨库。
+* 代价：数据库不再兜底，必须保证所有写入都经过应用层校验，不允许绕过应用直接改库。
+* 审计日志表、变更快照表本来就不关联主数据，保留快照语义，主数据封存不影响历史日志。
+
+=== 4.3 审计日志只追加约束
 
 . _触发器_：在 `iam_audit_log` 上创建 `BEFORE UPDATE` 与 `BEFORE DELETE` 触发器，直接 `SIGNAL SQLSTATE '45000'` 拒绝。
 . _权限控制_：应用连接账号仅授予 `INSERT`、`SELECT` 权限，不授予 `UPDATE`、`DELETE`。
 . _归档_：按时间分区或定期归档至对象存储，归档表同样只读；归档不改变"永久保存"属性（NFR-10）。
 . _防篡改_：可选对 `detail` 与关键字段计算哈希链（前一条日志哈希入下一条），增强不可抵赖性。
 
-==== 4.4 缓存说明（Redis 不建表）
+=== 4.4 缓存说明（Redis 不建表）
 
 * 权限快照缓存：key `iam:perm:{userId}:{systemCode}:{permVersion}`，TTL 短（如 5 分钟），变更事件递增 `permVersion` 使旧 key 失效（FR-40）。
 * 令牌会话缓存：key `iam:token:{tokenHash}`，TTL 与令牌有效期一致。
 * 分布式锁：key `iam:lock:auth:{userId}`、`iam:lock:role:{roleId}`，用于授权/回收/封存串行化（FR-41）。
 * 变更事件通道：Redis Pub/Sub 或消息队列，逻辑上与权限缓存隔离（D10）。
 
-==== 4.5 常用查询索引
+=== 4.5 常用查询索引
 
-[cols="1,1,1"]
+联合唯一索引遵循**最左前缀原则**，同时可以服务"按首列查询"，因此不再为首列单独建索引。
+
+[cols="1,2,2"]
 |===
-| 表 | 索引 | 用途
+| 表 | 索引 | 服务的查询
 
-| iam_org | `idx_org_parent(parent_id)`、`idx_org_ancestors(ancestors)` | 组织树查询、子树查询
+| iam_user | `uk_user_user_no(user_no)`、`idx_user_org(org_id)`、`idx_user_status(account_status)` | 登录按账号查用户；按组织、状态筛选用户列表
 
-| iam_user | `idx_user_org(org_id)`、`idx_user_status(account_status)`、`idx_user_name_hash(name_hash)`、`idx_user_phone_hash(phone_hash)` | 按组织/状态/姓名/电话检索
+| iam_role | `uk_role_code(role_code)`、`idx_role_parent(parent_id)` | 新建角色查重；继承链查询（RBAC1）
 
-| iam_role | `idx_role_parent(parent_id)`、`idx_role_type(role_type)` | 继承链、按类型查询
+| iam_user_role | `uk_user_role(user_id, role_id)`、`idx_ur_role(role_id)` | 鉴权时按用户查有效角色（走唯一索引前缀）；按角色反查用户
 
-| iam_user_role | `idx_ur_user(user_id)`、`idx_ur_role(role_id)`、`idx_ur_expire(expire_time)` | 用户角色查询、到期回收扫描
+| iam_module | `uk_module_code(system_id, module_code)` | 鉴权时按系统查模块（走唯一索引前缀）
 
-| iam_module | `idx_module_system(system_id)` | 按系统查模块
+| iam_function_point | `uk_fp_code(module_id, point_code)`、`uk_fp_api(api_path, api_method)` | 按模块查功能点；鉴权拦截器按 API 模板 + 方法查功能点（每个请求一次）
 
-| iam_function_point | `idx_fp_module(module_id)`、`idx_fp_api(api_path, api_method)` | 按模块查功能点、API 映射
+| iam_role_function | `uk_role_fp(role_id, function_point_id)`、`idx_rf_fp(function_point_id)` | 鉴权时按角色查功能点（走唯一索引前缀）；按功能点反查角色
 
-| iam_role_function | `idx_rf_role(role_id)`、`idx_rf_fp(function_point_id)` | 角色权限查询、功能点反查
+| iam_token | `uk_token_hash(token_hash)`、`idx_token_user_status(user_id, status)` | 每个请求按令牌哈希认证；账号停用/封存时吊销该用户全部有效令牌
 
-| iam_role_data_scope | `idx_rds_role(role_id)`、`idx_rds_scope(scope_type)` | 数据范围查询
+| iam_org（RBAC3） | `idx_org_parent(parent_id)`、`idx_org_ancestors(ancestors)` | 组织树、子树查询
 
-| iam_token | `idx_token_user(user_id)`、`idx_token_expire(expire_at)`、`idx_token_status(status)` | 令牌校验、过期清理
-
-| iam_audit_log | `idx_log_time(operate_time)`、`idx_log_user(user_id)`、`idx_log_action(action)`、`idx_log_success(success)` | 日志查询（FR-45）
-
-| iam_permission_change_log | `idx_pcl_user(user_id)`、`idx_pcl_time(changed_at)` | 变更追溯
+| iam_audit_log（RBAC3） | `idx_log_time(operate_time)`、`idx_log_user(user_id)` | 日志查询（FR-45）
 |===
 
 '''
 
-=== 5. MySQL 8.0 建表 DDL
+== 5. MySQL 8.0 建表 DDL
 
-```sql
--- ============================================================
--- 统一应用软件权限管理系统 数据库建表脚本
--- 目标：MySQL 8.0 / InnoDB / utf8mb4
--- ============================================================
+完整建表脚本为仓库中的 `src/main/resources/db/schema.sql`，以下摘录 RBAC0 阶段已实现的 8 张表，与脚本内容一致。其余 6 张表按第 3 章的目标设计在后续阶段补充。
 
-CREATE DATABASE IF NOT EXISTS iam_platform
-  DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_0900_ai_ci;
+导入方式：
 
-USE iam_platform;
+[source,bash]
+----
+mysql -u root -p -e "CREATE DATABASE iam_platform DEFAULT CHARSET utf8mb4;"
+mysql -u root -p iam_platform < src/main/resources/db/schema.sql
+mysql -u root -p iam_platform < src/main/resources/db/seed.sql
+----
 
--- ------------------------------------------------------------
--- 1. iam_org 组织机构
--- ------------------------------------------------------------
-CREATE TABLE iam_org (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
-  parent_id     BIGINT UNSIGNED NULL COMMENT '上级组织ID，根为NULL',
-  ancestors     VARCHAR(500) NOT NULL DEFAULT '0' COMMENT '祖先路径，逗号分隔',
-  org_code      VARCHAR(64) NOT NULL COMMENT '组织编码',
-  org_name      VARCHAR(128) NOT NULL COMMENT '组织名称',
-  org_type      VARCHAR(16) NOT NULL COMMENT 'HQ/BRANCH/DEPT/PROJECT',
-  org_level     TINYINT NOT NULL COMMENT '层级1-4',
-  leader_user_id BIGINT UNSIGNED NULL COMMENT '负责人',
-  sort_no       INT NOT NULL DEFAULT 0 COMMENT '排序',
-  status        VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/DISABLED',
-  is_deleted    TINYINT(1) NOT NULL DEFAULT 0 COMMENT '软删除',
-  created_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
-  updated_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
-  created_by    BIGINT UNSIGNED NULL COMMENT '创建人',
-  updated_by    BIGINT UNSIGNED NULL COMMENT '更新人',
-  PRIMARY KEY (id),
-  UNIQUE KEY uk_org_code (org_code),
-  KEY idx_org_parent (parent_id),
-  KEY idx_org_ancestors (ancestors),
-  CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES iam_org (id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='组织机构';
-
--- ------------------------------------------------------------
---
-
--- ============ DDL 续 ============
-
-```sql
--- ============================================================
--- 2. iam_user 用户表
--- ============================================================
-CREATE TABLE iam_user (
-    user_id           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '用户ID',
-    username          VARCHAR(64)   NOT NULL                COMMENT '登录账号',
-    password_hash     VARCHAR(255)  NOT NULL                COMMENT '密码哈希(BCrypt)',
-    real_name_enc     VARBINARY(512) NOT NULL               COMMENT '姓名密文(AES-256-GCM)',
-    real_name_mask    VARCHAR(64)   NOT NULL                COMMENT '姓名脱敏展示值(如 张*)',
-    phone_enc         VARBINARY(512) NULL                   COMMENT '手机号密文(AES-256-GCM)',
-    phone_mask        VARCHAR(32)   NULL                    COMMENT '手机号脱敏展示值(如 138****1234)',
-    email             VARCHAR(128)  NULL                    COMMENT '邮箱',
-    employee_no       VARCHAR(64)   NULL                    COMMENT '工号',
-    org_id            BIGINT        NOT NULL                COMMENT '所属组织ID',
-    position_name     VARCHAR(64)   NULL                    COMMENT '岗位名称(如 安全员/预算员/质检员)',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '账号状态:1正常 2封存(离职禁用)',
-    is_builtin        TINYINT       NOT NULL DEFAULT 0      COMMENT '是否内置账号:1是 0否',
-    last_login_time   DATETIME      NULL                    COMMENT '最后登录时间',
-    pwd_update_time   DATETIME      NULL                    COMMENT '密码最后修改时间',
-    remark            VARCHAR(255)  NULL                    COMMENT '备注',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    create_by         BIGINT        NULL                    COMMENT '创建人',
-    update_by         BIGINT        NULL                    COMMENT '更新人',
-    PRIMARY KEY (user_id),
-    UNIQUE KEY uk_user_username (username),
-    UNIQUE KEY uk_user_employee_no (employee_no),
+[source,sql]
+----
+CREATE TABLE IF NOT EXISTS iam_user (
+    id             BIGINT       NOT NULL AUTO_INCREMENT,
+    user_no        VARCHAR(32)  NOT NULL COMMENT '账号（登录名）',
+    password_hash  VARCHAR(128) NOT NULL COMMENT '密码 PBKDF2 哈希（盐:哈希）',
+    name_enc       VARCHAR(512) NOT NULL COMMENT '姓名密文',
+    name_hash      VARCHAR(64)  NULL     COMMENT '姓名哈希（检索用）',
+    phone_enc      VARCHAR(512) NULL     COMMENT '手机号密文',
+    phone_hash     VARCHAR(64)  NULL     COMMENT '手机号哈希',
+    org_id         BIGINT       NOT NULL COMMENT '所属组织ID',
+    post           VARCHAR(64)  NULL     COMMENT '岗位',
+    account_status VARCHAR(16)  NOT NULL DEFAULT 'NORMAL' COMMENT 'NORMAL/DISABLED/SEALED/LOCKED',
+    leave_time     DATETIME     NULL     COMMENT '离职时间',
+    last_login_at  DATETIME     NULL     COMMENT '最近登录时间',
+    is_deleted     TINYINT      NOT NULL DEFAULT 0,
+    created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by     BIGINT       NULL,
+    updated_by     BIGINT       NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_user_no (user_no),
     KEY idx_user_org (org_id),
-    KEY idx_user_status (status),
-    KEY idx_user_position (position_name),
-    CONSTRAINT fk_user_org FOREIGN KEY (org_id) REFERENCES iam_org (org_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户表(员工账号,离职封存不物理删除)';
+    KEY idx_user_status (account_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户';
 
--- ============================================================
--- 3. iam_role 角色表
--- ============================================================
-CREATE TABLE iam_role (
-    role_id           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '角色ID',
-    role_code         VARCHAR(64)   NOT NULL                COMMENT '角色编码(唯一)',
-    role_name         VARCHAR(64)   NOT NULL                COMMENT '角色名称',
-    role_type         TINYINT       NOT NULL DEFAULT 2      COMMENT '角色类型:1内置 2自定义',
-    data_scope_type   TINYINT       NOT NULL DEFAULT 1      COMMENT '默认数据范围:1全部 2本公司 3本部门及下级 4本部门 5本人/本项目 6自定义',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1启用 0停用',
-    sort_no           INT           NOT NULL DEFAULT 0      COMMENT '排序号',
-    remark            VARCHAR(255)  NULL                    COMMENT '备注',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    create_by         BIGINT        NULL                    COMMENT '创建人',
-    update_by         BIGINT        NULL                    COMMENT '更新人',
-    PRIMARY KEY (role_id),
+CREATE TABLE IF NOT EXISTS iam_role (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    role_code   VARCHAR(64)  NOT NULL COMMENT '角色编码',
+    role_name   VARCHAR(128) NOT NULL COMMENT '角色名称',
+    role_type   VARCHAR(16)  NOT NULL COMMENT 'FUNC=功能角色 / DATA=岗位型数据角色',
+    parent_id   BIGINT       NULL     COMMENT '父角色（RBAC1 继承，RBAC0 不使用）',
+    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    description VARCHAR(500) NULL,
+    is_deleted  TINYINT      NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by  BIGINT       NULL,
+    updated_by  BIGINT       NULL,
+    PRIMARY KEY (id),
     UNIQUE KEY uk_role_code (role_code),
-    KEY idx_role_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色表(RBAC0)';
+    KEY idx_role_parent (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色';
 
--- ============================================================
--- 4. iam_role_exclusion 角色互斥表
--- ============================================================
-CREATE TABLE iam_role_exclusion (
-    exclusion_id      BIGINT        NOT NULL AUTO_INCREMENT COMMENT '互斥规则ID',
-    role_id_a         BIGINT        NOT NULL                COMMENT '角色A',
-    role_id_b         BIGINT        NOT NULL                COMMENT '角色B',
-    remark            VARCHAR(255)  NULL                    COMMENT '互斥说明',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by         BIGINT        NULL                    COMMENT '创建人',
-    PRIMARY KEY (exclusion_id),
-    UNIQUE KEY uk_exclusion_pair (role_id_a, role_id_b),
-    KEY idx_exclusion_role_b (role_id_b),
-    CONSTRAINT fk_exclusion_role_a FOREIGN KEY (role_id_a) REFERENCES iam_role (role_id),
-    CONSTRAINT fk_exclusion_role_b FOREIGN KEY (role_id_b) REFERENCES iam_role (role_id),
-    CONSTRAINT ck_exclusion_order CHECK (role_id_a < role_id_b)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色互斥表(同一用户不可同时拥有互斥角色)';
-
--- ============================================================
--- 5. iam_user_role 用户角色关联表
--- ============================================================
-CREATE TABLE iam_user_role (
-    user_role_id      BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    user_id           BIGINT        NOT NULL                COMMENT '用户ID',
-    role_id           BIGINT        NOT NULL                COMMENT '角色ID',
-    grant_type        TINYINT       NOT NULL DEFAULT 1      COMMENT '授予方式:1人工手动授予 2初始化',
-    grant_by          BIGINT        NULL                    COMMENT '授予人',
-    grant_time        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '授予时间',
-    expire_time       DATETIME      NULL                    COMMENT '到期时间(NULL永久)',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1有效 0已解绑',
-    PRIMARY KEY (user_role_id),
+CREATE TABLE IF NOT EXISTS iam_user_role (
+    id             BIGINT       NOT NULL AUTO_INCREMENT,
+    user_id        BIGINT       NOT NULL,
+    role_id        BIGINT       NOT NULL,
+    effective_time DATETIME     NULL     COMMENT '生效时间',
+    expire_time    DATETIME     NULL     COMMENT '失效时间，NULL 表示长期',
+    grant_by       BIGINT       NULL     COMMENT '授权人',
+    grant_reason   VARCHAR(255) NULL     COMMENT '授权原因',
+    status         VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/EXPIRED/REVOKED',
+    created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
     UNIQUE KEY uk_user_role (user_id, role_id),
-    KEY idx_ur_role (role_id),
-    KEY idx_ur_status (status),
-    CONSTRAINT fk_ur_user FOREIGN KEY (user_id) REFERENCES iam_user (user_id),
-    CONSTRAINT fk_ur_role FOREIGN KEY (role_id) REFERENCES iam_role (role_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户角色关联表(人工授予/调整)';
+    KEY idx_ur_role (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户-角色关联';
 
--- ============================================================
--- 6. iam_system 业务系统表(18套)
--- ============================================================
-CREATE TABLE iam_system (
-    system_id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '系统ID',
-    system_code       VARCHAR(64)   NOT NULL                COMMENT '系统编码(唯一,SSO客户端标识)',
-    system_name       VARCHAR(128)  NOT NULL                COMMENT '系统名称',
-    system_url        VARCHAR(255)  NULL                    COMMENT '系统访问地址',
-    sso_secret        VARCHAR(255)  NULL                    COMMENT 'SSO客户端密钥(加密存储)',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1启用 0停用',
-    sort_no           INT           NOT NULL DEFAULT 0      COMMENT '排序号',
-    remark            VARCHAR(255)  NULL                    COMMENT '备注',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (system_id),
-    UNIQUE KEY uk_system_code (system_code),
-    KEY idx_system_status (status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='业务系统表(18套在跑业务软件)';
+CREATE TABLE IF NOT EXISTS iam_system (
+    id           BIGINT       NOT NULL AUTO_INCREMENT,
+    system_code  VARCHAR(64)  NOT NULL COMMENT '子系统编码',
+    system_name  VARCHAR(128) NOT NULL COMMENT '子系统名称',
+    callback_url VARCHAR(500) NULL,
+    public_key   TEXT         NULL,
+    status       VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    description  VARCHAR(500) NULL,
+    is_deleted   TINYINT      NOT NULL DEFAULT 0,
+    created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_system_code (system_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接入子系统';
 
--- ============================================================
--- 7. iam_module 模块/菜单表
--- ============================================================
-CREATE TABLE iam_module (
-    module_id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '模块ID',
-    system_id         BIGINT        NOT NULL                COMMENT '所属系统ID',
-    parent_id         BIGINT        NOT NULL DEFAULT 0      COMMENT '父模块ID(0为根)',
-    module_code       VARCHAR(64)   NOT NULL                COMMENT '模块编码',
-    module_name       VARCHAR(128)  NOT NULL                COMMENT '模块/菜单名称',
-    module_type       TINYINT       NOT NULL DEFAULT 1      COMMENT '类型:1菜单 2页面 3按钮组',
-    route_path        VARCHAR(255)  NULL                    COMMENT '前端路由/页面路径',
-    icon              VARCHAR(64)   NULL                    COMMENT '图标',
-    sort_no           INT           NOT NULL DEFAULT 0      COMMENT '排序号',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1启用 0停用',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (module_id),
-    UNIQUE KEY uk_module_code (system_id, module_code),
-    KEY idx_module_system (system_id),
-    KEY idx_module_parent (parent_id),
-    CONSTRAINT fk_module_system FOREIGN KEY (system_id) REFERENCES iam_system (system_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='模块/菜单表(前端菜单与页面元素控制)';
+CREATE TABLE IF NOT EXISTS iam_module (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    system_id   BIGINT       NOT NULL,
+    module_code VARCHAR(64)  NOT NULL,
+    module_name VARCHAR(128) NOT NULL,
+    sort_no     INT          NOT NULL DEFAULT 0,
+    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    is_deleted  TINYINT      NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_module_code (system_id, module_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模块';
 
--- ============================================================
--- 8. iam_function_point 功能点表(约359个)
--- ============================================================
-CREATE TABLE iam_function_point (
-    fp_id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '功能点ID',
-    system_id         BIGINT        NOT NULL                COMMENT '所属系统ID',
-    module_id         BIGINT        NOT NULL                COMMENT '所属模块ID',
-    fp_code           VARCHAR(128)  NOT NULL                COMMENT '功能点编码(唯一)',
-    fp_name           VARCHAR(128)  NOT NULL                COMMENT '功能点名称',
-    fp_type           TINYINT       NOT NULL DEFAULT 1      COMMENT '类型:1菜单 2按钮 3API',
-    api_path          VARCHAR(255)  NULL                    COMMENT 'API路径(后端鉴权用)',
-    http_method       VARCHAR(16)   NULL                    COMMENT 'HTTP方法',
-    perm_action       VARCHAR(64)   NULL                    COMMENT '权限动作(查看/新增/编辑/审批/导出等)',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1启用 0停用',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (fp_id),
-    UNIQUE KEY uk_fp_code (fp_code),
-    KEY idx_fp_system (system_id),
-    KEY idx_fp_module (module_id),
-    KEY idx_fp_api (api_path),
-    CONSTRAINT fk_fp_system FOREIGN KEY (system_id) REFERENCES iam_system (system_id),
-    CONSTRAINT fk_fp_module FOREIGN KEY (module_id) REFERENCES iam_module (module_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='功能点表(功能权限最小单元,含API)';
+CREATE TABLE IF NOT EXISTS iam_function_point (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    module_id   BIGINT       NOT NULL,
+    point_code  VARCHAR(64)  NOT NULL COMMENT '功能点编码',
+    point_name  VARCHAR(128) NOT NULL COMMENT '功能点名称',
+    action      VARCHAR(64)  NOT NULL COMMENT '操作取值（12 种之一）',
+    api_path    VARCHAR(255) NULL     COMMENT 'API 映射模板，如 /users/{userId}',
+    api_method  VARCHAR(16)  NULL     COMMENT 'HTTP 方法',
+    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    is_deleted  TINYINT      NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_fp_code (module_id, point_code),
+    UNIQUE KEY uk_fp_api (api_path, api_method)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='功能点';
 
--- ============================================================
--- 9. iam_role_function 角色功能权限表
--- ============================================================
-CREATE TABLE iam_role_function (
-    role_fp_id        BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    role_id           BIGINT        NOT NULL                COMMENT '角色ID',
-    fp_id             BIGINT        NOT NULL                COMMENT '功能点ID',
-    perm_value        VARCHAR(32)   NOT NULL DEFAULT '查看' COMMENT '权限取值:无/查看/全部/查看/编辑/查看/新增/查看/审批/查看/导出/查看本人/查看/编辑本人等',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by         BIGINT        NULL                    COMMENT '创建人',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (role_fp_id),
-    UNIQUE KEY uk_role_fp (role_id, fp_id),
-    KEY idx_rf_fp (fp_id),
-    CONSTRAINT fk_rf_role FOREIGN KEY (role_id) REFERENCES iam_role (role_id),
-    CONSTRAINT fk_rf_fp FOREIGN KEY (fp_id) REFERENCES iam_function_point (fp_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色功能权限表';
+CREATE TABLE IF NOT EXISTS iam_role_function (
+    id                BIGINT      NOT NULL AUTO_INCREMENT,
+    role_id           BIGINT      NOT NULL,
+    function_point_id BIGINT      NOT NULL,
+    allowed_action    VARCHAR(64) NOT NULL COMMENT '授予的操作（12 种之一）',
+    created_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by        BIGINT      NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_role_fp (role_id, function_point_id),
+    KEY idx_rf_fp (function_point_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-功能关联';
 
--- ============================================================
--- 10. iam_data_scope 数据范围定义表
--- ============================================================
-CREATE TABLE iam_data_scope (
-    scope_id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '数据范围ID',
-    scope_code        VARCHAR(64)   NOT NULL                COMMENT '范围编码(唯一)',
-    scope_name        VARCHAR(128)  NOT NULL                COMMENT '范围名称',
-    scope_type        TINYINT       NOT NULL                COMMENT '类型:1全部 2本公司 3本部门及下级 4本部门 5本人/本项目 6自定义',
-    org_id            BIGINT        NULL                    COMMENT '关联组织ID(自定义范围时使用)',
-    project_id        BIGINT        NULL                    COMMENT '关联项目ID(本项目范围时使用)',
-    remark            VARCHAR(255)  NULL                    COMMENT '备注',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (scope_id),
-    UNIQUE KEY uk_scope_code (scope_code),
-    KEY idx_scope_org (org_id),
-    CONSTRAINT fk_scope_org FOREIGN KEY (org_id) REFERENCES iam_org (org_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='数据范围定义表(数据权限维度)';
-
--- ============================================================
--- 11. iam_role_data_scope 角色数据范围关联表
--- ============================================================
-CREATE TABLE iam_role_data_scope (
-    role_scope_id     BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    role_id           BIGINT        NOT NULL                COMMENT '角色ID',
-    scope_id          BIGINT        NOT NULL                COMMENT '数据范围ID',
-    system_id         BIGINT        NULL                    COMMENT '限定系统ID(NULL表示全部系统)',
-    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    create_by         BIGINT        NULL                    COMMENT '创建人',
-    PRIMARY KEY (role_scope_id),
-    UNIQUE KEY uk_role_scope_system (role_id, scope_id, system_id),
-    KEY idx_rds_scope (scope_id),
-    KEY idx_rds_system (system_id),
-    CONSTRAINT fk_rds_role FOREIGN KEY (role_id) REFERENCES iam_role (role_id),
-    CONSTRAINT fk_rds_scope FOREIGN KEY (scope_id) REFERENCES iam_data_scope (scope_id),
-    CONSTRAINT fk_rds_system FOREIGN KEY (system_id) REFERENCES iam_system (system_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='角色数据范围关联表';
-
--- ============================================================
--- 12. iam_token 令牌表(SSO/接口鉴权)
--- ============================================================
-CREATE TABLE iam_token (
-    token_id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '令牌ID',
-    user_id           BIGINT        NOT NULL                COMMENT '用户ID',
-    system_id         BIGINT        NULL                    COMMENT '目标系统ID(NULL为IAM自身)',
-    access_token      VARCHAR(512)  NOT NULL                COMMENT '访问令牌',
-    refresh_token     VARCHAR(512)  NULL                    COMMENT '刷新令牌',
-    token_type        TINYINT       NOT NULL DEFAULT 1      COMMENT '类型:1访问令牌 2刷新令牌',
-    client_ip         VARCHAR(64)   NULL                    COMMENT '客户端IP',
-    issue_time        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '签发时间',
-    expire_time       DATETIME      NOT NULL                COMMENT '过期时间',
-    revoke_time       DATETIME      NULL                    COMMENT '吊销时间(NULL未吊销)',
-    status            TINYINT       NOT NULL DEFAULT 1      COMMENT '状态:1有效 0已吊销 2已过期',
+CREATE TABLE IF NOT EXISTS iam_token (
+    token_id    VARCHAR(64)  NOT NULL COMMENT '令牌唯一标识',
+    user_id     BIGINT       NOT NULL,
+    system_code VARCHAR(64)  NOT NULL,
+    token_hash  VARCHAR(64)  NOT NULL COMMENT '令牌哈希（不存明文）',
+    issued_at   DATETIME     NOT NULL,
+    expire_at   DATETIME     NOT NULL,
+    revoked     TINYINT      NOT NULL DEFAULT 0,
+    revoked_at  DATETIME     NULL,
+    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    client_ip   VARCHAR(64)  NULL,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (token_id),
-    UNIQUE KEY uk_token_access (access_token),
-    KEY idx_token_user (user_id),
-    KEY idx_token_system (system_id),
-    KEY idx_token_status (status),
-    CONSTRAINT fk_token_user FOREIGN KEY (user_id) REFERENCES iam_user (user_id),
-    CONSTRAINT fk_token_system FOREIGN KEY (system_id) REFERENCES iam_system (system_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='令牌表(统一认证SSO与接口鉴权)';
-
--- ============================================================
--- 13. iam_audit_log 审计日志表(仅追加,永久保存)
--- ============================================================
-CREATE TABLE iam_audit_log (
-    log_id            BIGINT        NOT NULL AUTO_INCREMENT COMMENT '日志ID',
-    operate_time      DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '操作时间',
-    operate_action    VARCHAR(255)  NOT NULL                COMMENT '操作内容/动作',
-    username          VARCHAR(64)   NOT NULL                COMMENT '用户名',
-    user_id           BIGINT        NULL                    COMMENT '用户ID',
-    system_id         BIGINT        NULL                    COMMENT '所属系统ID',
-    fp_code           VARCHAR(128)  NULL                    COMMENT '功能点编码',
-    request_uri       VARCHAR(512)  NULL                    COMMENT '请求URI',
-    http_method       VARCHAR(16)   NULL                    COMMENT 'HTTP方法',
-    client_ip         VARCHAR(64)   NULL                    COMMENT '客户端IP',
-    result            TINYINT       NOT NULL                COMMENT '操作成功与否:1成功 0失败',
-    fail_reason       VARCHAR(512)  NULL                    COMMENT '失败原因',
-    detail            TEXT          NULL                    COMMENT '操作详情(JSON)',
-    PRIMARY KEY (log_id),
-    KEY idx_log_time (operate_time),
-    KEY idx_log_username (username),
-    KEY idx_log_user (user_id),
-    KEY idx_log_system (system_id),
-    KEY idx_log_result (result)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审计日志表(仅追加,永久保存,禁止删除)';
-
--- ============================================================
--- 14. iam_permission_change_log 权限变更日志表
--- ============================================================
-CREATE TABLE iam_permission_change_log (
-    change_id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '变更ID',
-    change_time       DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '变更时间',
-    change_type       TINYINT       NOT NULL                COMMENT '变更类型:1角色功能权限 2角色数据范围 3用户角色 4用户状态 5角色互斥',
-    target_type       VARCHAR(32)   NOT NULL                COMMENT '变更对象类型(role/user/role_function/role_data_scope)',
-    target_id         BIGINT        NOT NULL                COMMENT '变更对象ID',
-    before_value      TEXT          NULL                    COMMENT '变更前值(JSON)',
-    after_value       TEXT          NULL                    COMMENT '变更后值(JSON)',
-    operator_id       BIGINT        NULL                    COMMENT '操作人ID',
-    operator_name     VARCHAR(64)   NULL                    COMMENT '操作人用户名',
-    push_status       TINYINT       NOT NULL DEFAULT 0      COMMENT '缓存失效推送状态:0待推送 1已推送 2推送失败',
-    push_time         DATETIME      NULL                    COMMENT '推送时间',
-    remark            VARCHAR(255)  NULL                    COMMENT '备注',
-    PRIMARY KEY (change_id),
-    KEY idx_pcl_time (change_time),
-    KEY idx_pcl_target (target_type, target_id),
-    KEY idx_pcl_push (push_status),
-    KEY idx_pcl_operator (operator_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='权限变更日志表(记录变更并驱动缓存即时失效/推送)';
-```
+    UNIQUE KEY uk_token_hash (token_hash),
+    KEY idx_token_user_status (user_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
+----
 
 '''
 
-=== 初始化数据说明
+== 6. 初始化数据说明
 
-系统上线前需预置以下基础数据，作为 RBAC 权限体系的初始基线。
+=== 6.1 RBAC0 初始化数据（`seed.sql`，已实现）
 
-==== 一、预置 5 类角色（对应现有功能矩阵粗分角色）
+`src/main/resources/db/seed.sql` 在建表后执行，让管理后台自身也受 RBAC 保护：管理员通过角色拥有管理后台的功能点，鉴权拦截器按功能点检查每个管理端 API。
+
+[cols="1,1,2"]
+|===
+| 表 | 数据 | 说明
+
+| iam_system | 1 条：`ADMIN` 权限管理后台 | 管理后台自身作为一个接入系统，编码与前端常量 `ADMIN_SYSTEM_CODE` 一致
+
+| iam_module | 2 条：`MENU` 菜单、`API` 管理端接口 |
+
+| iam_function_point | 8 个菜单功能点（ID 10001～10008）+ 17 个 API 功能点（ID 20001～20017） | 菜单功能点 ID 与前端 `web/src/constants/permissions.ts` 一致；API 功能点登记 `api_path` + `api_method`，如 `GET /users`、`PUT /users/{userId}/status`
+
+| iam_role | 1 条：`SUPER_ADMIN` 超级管理员 |
+
+| iam_role_function | 25 条 | 超级管理员绑定以上全部功能点
+
+| iam_user | 1 条：`admin`，初始密码 `Admin@123` | 上线前必须修改；姓名密文依赖 `crypto.aes-key`，修改密钥后需重新生成
+
+| iam_user_role | 1 条 | `admin` 被授予 `SUPER_ADMIN`
+|===
+
+=== 6.2 后续阶段的基线数据
+
+系统正式上线前还需预置以下基础数据，作为 RBAC 权限体系的初始基线，在 RBAC3 阶段导入。
+
+==== 6.2.1 预置 5 类角色（对应现有功能矩阵粗分角色）
 
 [cols="1,1,1,1,1"]
 |===
@@ -1032,7 +906,7 @@ CREATE TABLE iam_permission_change_log (
 
 说明：5 类角色为基线角色，后续可基于岗位（安全员约 871 人、预算员约 820 人、质检员约 751 人等）通过 `iam_role` 扩展自定义角色，并借助 `iam_role_exclusion` 配置互斥关系（如系统管理员与公司领导互斥）。
 
-==== 二、预置 18 套业务系统（`iam_system`）
+==== 6.2.2 预置 18 套业务系统（`iam_system`）
 
 [cols="1,1,1"]
 |===
@@ -1072,12 +946,12 @@ CREATE TABLE iam_permission_change_log (
 
 | 17 | `SYS_COST` | 成本管控系统
 
-| 18 | `SYS_ADMIN` | 系统管理后台
+| 18 | `ADMIN` | 系统管理后台（RBAC0 已由 `seed.sql` 预置）
 |===
 
 说明：18 套系统合计约 359 个功能点，初始化时按各系统实际菜单/按钮/API 逐条导入 `iam_module` 与 `iam_function_point`，权限取值严格取自既有集合（无、查看、全部、查看/编辑、查看/新增、查看/审批、查看/导出、查看/编辑/审批、查看/新增/编辑、查看/编辑/导出、查看本人、查看/编辑本人）。
 
-==== 三、预置 9 个分公司（`iam_org`，隶属 1 个总公司）
+==== 6.2.3 预置 9 个分公司（`iam_org`，隶属 1 个总公司）
 
 [cols="1,1,1"]
 |===

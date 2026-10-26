@@ -49,9 +49,9 @@ CREATE TABLE IF NOT EXISTS iam_user (
     created_by     BIGINT       NULL,
     updated_by     BIGINT       NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_user_no (user_no),
-    KEY idx_org (org_id),
-    KEY idx_status (account_status)
+    UNIQUE KEY uk_user_user_no (user_no),
+    KEY idx_user_org (org_id),
+    KEY idx_user_status (account_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户';
 
 -- ----------------------------------------------------------
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS iam_user_role (
     updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_role (user_id, role_id),
-    KEY idx_role (role_id)
+    KEY idx_ur_role (role_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户-角色关联';
 
 -- ----------------------------------------------------------
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS iam_module (
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_module (system_id, module_code)
+    UNIQUE KEY uk_module_code (system_id, module_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模块';
 
 -- ----------------------------------------------------------
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS iam_role_function (
     created_by        BIGINT      NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_role_fp (role_id, function_point_id),
-    KEY idx_fp (function_point_id)
+    KEY idx_rf_fp (function_point_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-功能关联';
 
 -- ----------------------------------------------------------
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS iam_token (
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (token_id),
     UNIQUE KEY uk_token_hash (token_hash),
-    KEY idx_user_status (user_id, status)
+    KEY idx_token_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
 
 -- ----------------------------------------------------------
