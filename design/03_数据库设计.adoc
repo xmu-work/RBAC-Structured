@@ -27,9 +27,9 @@
 
 '''
 
-=== 1. 设计约定
+== 1. 设计约定
 
-==== 1.1 命名规范
+=== 1.1 命名规范
 
 [cols="1,1,1"]
 |===
@@ -52,20 +52,20 @@
 | 布尔字段 | `is_` 前缀或语义名，`tinyint`，0/1 | `is_deleted`、`revoked`
 |===
 
-==== 1.2 字符集与排序规则
+=== 1.2 字符集与排序规则
 
 * 数据库、表、字符字段统一 `utf8mb4`，排序规则 `utf8mb4_0900_ai_ci`（MySQL 8.0 默认，支持中文与 emoji）。
 * 存储引擎统一 `InnoDB`，支持事务与行级锁。
 * 时间字段统一 `datetime`（秒级精度，对应 Java `LocalDateTime`），默认 `CURRENT_TIMESTAMP`。
 
-==== 1.3 主键策略
+=== 1.3 主键策略
 
 * 采用 _BIGINT 自增主键_（`bigint auto_increment`，有符号，与 Java `Long` 一一对应），避免 UUID 造成的索引膨胀与页分裂；对外暴露时通过编码字段（`user_no`、`role_code`、`system_code`）而非主键。
 * 例外：令牌表 `iam_token` 以 `token_id`（UUID 字符串）为主键，令牌本身只存哈希。
 * 审计日志表 `iam_audit_log` 主键 `log_id` 采用 `bigint auto_increment`，保证只追加写入的顺序性。
 * 关联表（`iam_user_role`、`iam_role_function`、`iam_role_data_scope`）采用自增 `id` 主键 + 业务唯一索引，便于扩展字段（有效期、授权人等）。
 
-==== 1.4 审计与软删除策略
+=== 1.4 审计与软删除策略
 
 [cols="1,1"]
 |===
@@ -82,7 +82,7 @@
 | 权限变更快照 | `iam_permission_change_log` 只追加，记录变更前后 JSON 快照，支持追溯（FR-42）
 |===
 
-==== 1.5 敏感字段加密说明
+=== 1.5 敏感字段加密说明
 
 [cols="1,1,1"]
 |===
@@ -103,7 +103,7 @@
 
 说明：`name_enc`、`phone_enc` 字段类型为 `varbinary(512)`（存密文二进制）或 `varchar(512)`（存 Base64 密文）。本设计采用 `varchar(512)` 便于跨语言与运维排查，密文长度按 AES-GCM 最大明文 128 字节估算。
 
-==== 1.6 实现阶段与表范围
+=== 1.6 实现阶段与表范围
 
 课程设计分三次检查逐步实现 RBAC0 → RBAC1 → RBAC3。本文档第 3 章给出全部 14 张表的目标设计，其中 **RBAC0 阶段已实现 8 张表**，与建表脚本 `schema.sql`、JPA 实体完全一致，并已在 MySQL 8.0 上导入验证。
 
@@ -122,9 +122,9 @@ RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` �
 
 '''
 
-=== 2. 概念模型说明（供 ER 图绘制）
+== 2. 概念模型说明（供 ER 图绘制）
 
-==== 2.1 实体清单
+=== 2.1 实体清单
 
 [cols="1,1,1,1"]
 |===
@@ -163,7 +163,7 @@ RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` �
 
 各实体的实现阶段见 1.6。
 
-==== 2.2 实体关系与基数
+=== 2.2 实体关系与基数
 
 [cols="1,1,1,1"]
 |===
@@ -200,7 +200,7 @@ RBAC0 的核心是"用户—角色—权限"两个多对多关系：`iam_user` �
 | R15 | 数据范围字典 1:N 角色-数据范围授权 | 1:N | 字典项被多次引用
 |===
 
-==== 2.3 ER 图绘制要点
+=== 2.3 ER 图绘制要点
 
 * 以 `iam_user`、`iam_role`、`iam_function_point` 为三个核心实体，`iam_user_role`、`iam_role_function`、`iam_role_data_scope` 为三张关联表。
 * `iam_org` 为自关联树，`iam_role` 为自关联继承树，`iam_role_exclusion` 为角色自关联的 M:N 互斥边。
@@ -214,9 +214,9 @@ image::ER图.png[ER 图,width=100%]
 
 '''
 
-=== 3. 逻辑表结构清单
+== 3. 逻辑表结构清单
 
-==== 3.1 iam_org 组织机构（RBAC3 阶段实现）
+=== 3.1 iam_org 组织机构（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -253,7 +253,7 @@ image::ER图.png[ER 图,width=100%]
 | updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.2 iam_user 账号/员工（RBAC0 已实现）
+=== 3.2 iam_user 账号/员工（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -294,7 +294,7 @@ image::ER图.png[ER 图,width=100%]
 | updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.3 iam_role 角色（RBAC0 已实现）
+=== 3.3 iam_role 角色（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -325,7 +325,7 @@ image::ER图.png[ER 图,width=100%]
 | updated_by | bigint | 是 |  | 更新人
 |===
 
-==== 3.4 iam_role_exclusion 角色互斥（RBAC3 阶段实现）
+=== 3.4 iam_role_exclusion 角色互斥（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -346,7 +346,7 @@ image::ER图.png[ER 图,width=100%]
 
 互斥关系对称，写入时同时落 `(A,B)` 与 `(B,A)` 两条，或查询时双向匹配；本设计采用双向落库 + 唯一约束 `(role_id, excluded_role_id)`。
 
-==== 3.5 iam_user_role 用户-角色绑定（RBAC0 已实现）
+=== 3.5 iam_user_role 用户-角色绑定（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -375,7 +375,7 @@ image::ER图.png[ER 图,width=100%]
 
 唯一约束 `(user_id, role_id)`：同一用户同一角色只保留一行；撤销时置 `REVOKED`，再次授予时复用该行并恢复为 `ACTIVE`。
 
-==== 3.6 iam_system 业务接入系统（RBAC0 已实现）
+=== 3.6 iam_system 业务接入系统（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -402,7 +402,7 @@ image::ER图.png[ER 图,width=100%]
 | updated_at | datetime | 否 |  | 更新时间
 |===
 
-==== 3.7 iam_module 功能模块（RBAC0 已实现）
+=== 3.7 iam_module 功能模块（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -427,7 +427,7 @@ image::ER图.png[ER 图,width=100%]
 | updated_at | datetime | 否 |  | 更新时间
 |===
 
-==== 3.8 iam_function_point 功能点（RBAC0 已实现）
+=== 3.8 iam_function_point 功能点（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -460,7 +460,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 说明：`action` 字段描述功能点**支持的操作**；实际授权时 `iam_role_function.allowed_action` 记录角色被授予的操作，取 12 种之一（单值）。
 
-==== 3.9 iam_role_function 角色-功能权限（RBAC0 已实现）
+=== 3.9 iam_role_function 角色-功能权限（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -481,7 +481,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 唯一约束 `(role_id, function_point_id)`：同一角色对同一功能点只绑定一次，重复绑定在应用层跳过。
 
-==== 3.10 iam_data_scope 数据范围字典（RBAC3 阶段实现）
+=== 3.10 iam_data_scope 数据范围字典（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -502,7 +502,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 | created_at | datetime | 否 |  | 创建时间
 |===
 
-==== 3.11 iam_role_data_scope 角色-数据范围授权（RBAC3 阶段实现）
+=== 3.11 iam_role_data_scope 角色-数据范围授权（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -529,7 +529,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 唯一约束 `(role_id, scope_type, org_id, project_id)`；`org_id`/`project_id` 可空，按 `scope_type` 语义使用。
 
-==== 3.12 iam_token 令牌（RBAC0 已实现）
+=== 3.12 iam_token 令牌（RBAC0 已实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -558,7 +558,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 | created_at | datetime | 否 |  | 创建时间
 |===
 
-==== 3.13 iam_audit_log 审计日志（只追加、永久保存）（RBAC3 阶段实现）
+=== 3.13 iam_audit_log 审计日志（只追加、永久保存）（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -589,7 +589,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 无 `updated_at`、无 `is_deleted`；通过触发器禁止 UPDATE/DELETE（见 4.3）。
 
-==== 3.14 iam_permission_change_log 权限变更快照（RBAC3 阶段实现）
+=== 3.14 iam_permission_change_log 权限变更快照（RBAC3 阶段实现）
 
 [cols="1,1,1,1,1"]
 |===
@@ -618,9 +618,9 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 '''
 
-=== 4. 关键约束与索引
+== 4. 关键约束与索引
 
-==== 4.1 唯一约束
+=== 4.1 唯一约束
 
 [cols="1,1,1"]
 |===
@@ -655,7 +655,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 说明：`iam_org`、`iam_role_exclusion`、`iam_data_scope`、`iam_role_data_scope` 的约束属于后续阶段，实现时加入 `schema.sql`。
 
-==== 4.2 外键策略
+=== 4.2 外键策略
 
 * **不建物理外键，采用逻辑外键**：第 3 章中的 `FK→` 表示逻辑引用关系，`schema.sql` 不创建 `FOREIGN KEY` 约束。
 * 引用完整性由应用层保证：每个写操作在 Service 中先校验被引用记录存在且有效，例如授予角色前校验用户存在且状态正常、角色存在且为 `ACTIVE`；绑定功能权限前校验角色与每个功能点都存在。
@@ -666,21 +666,21 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 * 代价：数据库不再兜底，必须保证所有写入都经过应用层校验，不允许绕过应用直接改库。
 * 审计日志表、变更快照表本来就不关联主数据，保留快照语义，主数据封存不影响历史日志。
 
-==== 4.3 审计日志只追加约束
+=== 4.3 审计日志只追加约束
 
 . _触发器_：在 `iam_audit_log` 上创建 `BEFORE UPDATE` 与 `BEFORE DELETE` 触发器，直接 `SIGNAL SQLSTATE '45000'` 拒绝。
 . _权限控制_：应用连接账号仅授予 `INSERT`、`SELECT` 权限，不授予 `UPDATE`、`DELETE`。
 . _归档_：按时间分区或定期归档至对象存储，归档表同样只读；归档不改变"永久保存"属性（NFR-10）。
 . _防篡改_：可选对 `detail` 与关键字段计算哈希链（前一条日志哈希入下一条），增强不可抵赖性。
 
-==== 4.4 缓存说明（Redis 不建表）
+=== 4.4 缓存说明（Redis 不建表）
 
 * 权限快照缓存：key `iam:perm:{userId}:{systemCode}:{permVersion}`，TTL 短（如 5 分钟），变更事件递增 `permVersion` 使旧 key 失效（FR-40）。
 * 令牌会话缓存：key `iam:token:{tokenHash}`，TTL 与令牌有效期一致。
 * 分布式锁：key `iam:lock:auth:{userId}`、`iam:lock:role:{roleId}`，用于授权/回收/封存串行化（FR-41）。
 * 变更事件通道：Redis Pub/Sub 或消息队列，逻辑上与权限缓存隔离（D10）。
 
-==== 4.5 常用查询索引
+=== 4.5 常用查询索引
 
 联合唯一索引遵循**最左前缀原则**，同时可以服务"按首列查询"，因此不再为首列单独建索引。
 
@@ -709,7 +709,7 @@ _3.8.1 action 取值集合_（与 SRS 一致，共 12 种）：`NONE`（无）�
 
 '''
 
-=== 5. MySQL 8.0 建表 DDL
+== 5. MySQL 8.0 建表 DDL
 
 完整建表脚本为仓库中的 `src/main/resources/db/schema.sql`，以下摘录 RBAC0 阶段已实现的 8 张表，与脚本内容一致。其余 6 张表按第 3 章的目标设计在后续阶段补充。
 
@@ -860,9 +860,9 @@ CREATE TABLE IF NOT EXISTS iam_token (
 
 '''
 
-=== 6. 初始化数据说明
+== 6. 初始化数据说明
 
-==== 6.1 RBAC0 初始化数据（`seed.sql`，已实现）
+=== 6.1 RBAC0 初始化数据（`seed.sql`，已实现）
 
 `src/main/resources/db/seed.sql` 在建表后执行，让管理后台自身也受 RBAC 保护：管理员通过角色拥有管理后台的功能点，鉴权拦截器按功能点检查每个管理端 API。
 
@@ -885,11 +885,11 @@ CREATE TABLE IF NOT EXISTS iam_token (
 | iam_user_role | 1 条 | `admin` 被授予 `SUPER_ADMIN`
 |===
 
-==== 6.2 后续阶段的基线数据
+=== 6.2 后续阶段的基线数据
 
 系统正式上线前还需预置以下基础数据，作为 RBAC 权限体系的初始基线，在 RBAC3 阶段导入。
 
-===== 6.2.1 预置 5 类角色（对应现有功能矩阵粗分角色）
+==== 6.2.1 预置 5 类角色（对应现有功能矩阵粗分角色）
 
 [cols="1,1,1,1,1"]
 |===
@@ -908,7 +908,7 @@ CREATE TABLE IF NOT EXISTS iam_token (
 
 说明：5 类角色为基线角色，后续可基于岗位（安全员约 871 人、预算员约 820 人、质检员约 751 人等）通过 `iam_role` 扩展自定义角色，并借助 `iam_role_exclusion` 配置互斥关系（如系统管理员与公司领导互斥）。
 
-===== 6.2.2 预置 18 套业务系统（`iam_system`）
+==== 6.2.2 预置 18 套业务系统（`iam_system`）
 
 [cols="1,1,1"]
 |===
@@ -953,7 +953,7 @@ CREATE TABLE IF NOT EXISTS iam_token (
 
 说明：18 套系统合计约 359 个功能点，初始化时按各系统实际菜单/按钮/API 逐条导入 `iam_module` 与 `iam_function_point`，权限取值严格取自既有集合（无、查看、全部、查看/编辑、查看/新增、查看/审批、查看/导出、查看/编辑/审批、查看/新增/编辑、查看/编辑/导出、查看本人、查看/编辑本人）。
 
-===== 6.2.3 预置 9 个分公司（`iam_org`，隶属 1 个总公司）
+==== 6.2.3 预置 9 个分公司（`iam_org`，隶属 1 个总公司）
 
 [cols="1,1,1"]
 |===
