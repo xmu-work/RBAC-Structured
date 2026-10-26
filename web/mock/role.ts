@@ -221,7 +221,7 @@ export default [
         return fail(1001, problems.join('; '))
       }
       if (roles.some((item) => item.roleCode === roleCode)) {
-        return fail(1001, 'roleCode: 角色编码已存在')
+        return fail(3009, `角色编码已存在: ${roleCode}`)
       }
       const created: MockRole = {
         id: nextRoleId++,

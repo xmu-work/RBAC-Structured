@@ -45,7 +45,7 @@ async function resolveUserName(userId: number): Promise<string> {
   try {
     const page = await listUsers({ page: 1, size: 100 })
     const user = page.list.find((item) => item.id === userId)
-    return user ? `${user.userNo} · ${user.displayName ?? ''}` : `用户 #${userId}`
+    return user ? `${user.userNo} · ${user.realName}` : `用户 #${userId}`
   } catch {
     return `用户 #${userId}`
   }

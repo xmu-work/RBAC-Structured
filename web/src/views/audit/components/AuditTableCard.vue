@@ -5,7 +5,7 @@ import { listAuditLogs } from '@/api/audit.api'
 import { listSystems } from '@/api/system.api'
 import { listUsers } from '@/api/user.api'
 import { useTable } from '@/composables/useTable'
-import { toLocalISO } from '@/utils/time'
+import { dateTimeColumnFormatter, toLocalISO } from '@/utils/time'
 import { DigitalBool } from '@/constants/enums'
 import type { AuditLog } from '@/types/audit.types'
 import type { System } from '@/types/system.types'
@@ -125,7 +125,7 @@ function asLog(row: unknown): AuditLog {
           <el-option
             v-for="user in users"
             :key="user.id"
-            :label="`${user.userNo} · ${user.displayName ?? ''}`"
+            :label="`${user.userNo} · ${user.realName}`"
             :value="user.id"
           />
         </el-select>
@@ -162,7 +162,7 @@ function asLog(row: unknown): AuditLog {
       <el-button size="small" type="primary" @click="refresh()">重试</el-button>
     </el-alert>
     <el-table v-else v-loading="loading" :data="rows">
-      <el-table-column prop="operateTime" label="操作时间" min-width="165" />
+      <el-table-column prop="operateTime" label="操作时间" min-width="165" :formatter="dateTimeColumnFormatter" />
       <el-table-column label="操作人" min-width="110">
         <template #default="{ row }">{{ asLog(row).username ?? `#${asLog(row).userId ?? '—'}` }}</template>
       </el-table-column>

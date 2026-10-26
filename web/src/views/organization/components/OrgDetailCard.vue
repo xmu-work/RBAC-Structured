@@ -5,6 +5,7 @@ import { getOrg } from '@/api/org.api'
 import { useDict } from '@/composables/useDict'
 import { OrgType } from '@/constants/enums'
 import type { Org } from '@/types/org.types'
+import { formatDateTime } from '@/utils/time'
 
 /** 组织类型 → 徽标配色（视觉映射，文案仍出自 dict store，契约 9.2-7） */
 type TagType = 'primary' | 'success' | 'info' | 'warning' | 'danger'
@@ -137,10 +138,10 @@ function dash(value: string | number | null | undefined): string {
           {{ dash(detail.leaderUserId) }}
         </el-descriptions-item>
         <el-descriptions-item label="创建时间">
-          {{ detail.createdAt }}
+          {{ formatDateTime(detail.createdAt) }}
         </el-descriptions-item>
         <el-descriptions-item label="更新时间">
-          {{ detail.updatedAt }}
+          {{ formatDateTime(detail.updatedAt) }}
         </el-descriptions-item>
       </el-descriptions>
       <p class="org-detail-card__time-hint">时间为后端原始格式 yyyy-MM-dd HH:mm:ss，原样直显</p>

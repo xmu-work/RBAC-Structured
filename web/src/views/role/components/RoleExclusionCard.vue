@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { listRoleExclusions, listRoles } from '@/api/role.api'
 import type { Role, RoleExclusion } from '@/types/role.types'
+import { dateTimeColumnFormatter } from '@/utils/time'
 
 /**
  * 互斥配置卡片（契约 8.5 / UC-05）：成对展示，配置即生效，新增走 L2 确认对话框；
@@ -113,7 +114,7 @@ async function load(): Promise<void> {
       <el-table-column label="配置原因" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">{{ row.description ?? '—' }}</template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="配置时间" min-width="160" />
+      <el-table-column prop="createdAt" label="配置时间" min-width="160" :formatter="dateTimeColumnFormatter" />
     </el-table>
   </el-card>
 </template>

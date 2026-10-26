@@ -4,6 +4,7 @@ import { getRole } from '@/api/role.api'
 import { useDict } from '@/composables/useDict'
 import { RoleType } from '@/constants/enums'
 import type { Role } from '@/types/role.types'
+import { formatDateTime } from '@/utils/time'
 
 /** 角色详情卡片（契约 8.5）：只读视图；更新/停用/删除、角色继承 [缺] 端点不提供入口 */
 const props = defineProps<{ roleId: number | null }>()
@@ -88,8 +89,8 @@ async function loadDetail(): Promise<void> {
         <el-descriptions-item label="描述" :span="2">
           {{ detail.description ?? '—' }}
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{ detail.updatedAt }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
+        <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
       </el-descriptions>
     </template>
   </el-card>

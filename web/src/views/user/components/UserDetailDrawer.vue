@@ -5,9 +5,10 @@ import { useDict } from '@/composables/useDict'
 import { useOrgNames } from '@/composables/useOrgTree'
 import { AccountStatus } from '@/constants/enums'
 import type { User } from '@/types/user.types'
+import { formatDateTime } from '@/utils/time'
 
 /**
- * 用户详情抽屉（契约 8.4 / 10.3）：只渲染脱敏视图字段（displayName/phoneMasked）。
+ * 用户详情抽屉（契约 8.4 / 10.3）：只渲染安全视图字段（realName/phoneMasked）。
  * 若后端误回 nameEnc/phoneEnc/*Hash 等密文字段，User 类型未声明、模板不渲染（红线 10.3）。
  */
 const props = defineProps<{
@@ -80,7 +81,7 @@ function dash(value: string | number | null | undefined): string {
     <template v-else-if="detail">
       <el-descriptions :column="1" border>
         <el-descriptions-item label="用户账号">{{ detail.userNo }}</el-descriptions-item>
-        <el-descriptions-item label="姓名（脱敏）">{{ detail.displayName ?? '—' }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">{{ detail.realName }}</el-descriptions-item>
         <el-descriptions-item label="手机号（脱敏）">{{ dash(detail.phoneMasked) }}</el-descriptions-item>
         <el-descriptions-item label="所属组织">{{ nameOf(detail.orgId) }}</el-descriptions-item>
         <el-descriptions-item label="岗位">{{ dash(detail.post) }}</el-descriptions-item>
@@ -89,10 +90,10 @@ function dash(value: string | number | null | undefined): string {
             {{ dictLabel(accountStatusOptions, detail.accountStatus) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="最近登录">{{ dash(detail.lastLoginAt) }}</el-descriptions-item>
-        <el-descriptions-item label="离职时间">{{ dash(detail.leaveTime) }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{ detail.updatedAt }}</el-descriptions-item>
+        <el-descriptions-item label="最近登录">{{ formatDateTime(detail.lastLoginAt) }}</el-descriptions-item>
+        <el-descriptions-item label="离职时间">{{ formatDateTime(detail.leaveTime) }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
+        <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
       </el-descriptions>
       <el-alert
         class="user-detail-drawer__note"

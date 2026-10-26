@@ -4,19 +4,19 @@ import { orgs, subtreeIds } from './org'
 /**
  * 用户模块契约级 Mock（契约 8.4 / 附录 B）
  * - 列表分页返回 PageResult{total,page,pageSize,list}；orgId 过滤按组织子树
- * - 响应为脱敏视图（displayName/phoneMasked），不含 nameEnc/phoneEnc/*Hash（契约 10.3 [待后端]）
+ * - 响应为后端 UserView 形状（realName 明文姓名 / phoneMasked 脱敏电话），不含 nameEnc/phoneEnc/*Hash（契约 10.3）
  * - 写接口 query 传参（postForm/putForm 契约 4.2）
  */
 
-const now = '2026-10-24 15:30:00'
+const now = '2026-10-24T15:30:00'
 
 type AccountStatus = 'NORMAL' | 'DISABLED' | 'SEALED' | 'LOCKED'
 
 interface MockUser {
   id: number
   userNo: string
-  displayName: string
-  phoneMasked: string
+  realName: string
+  phoneMasked: string | null
   orgId: number
   post?: string
   accountStatus: AccountStatus
@@ -61,7 +61,7 @@ export const users: MockUser[] = [
 function u(
   id: number,
   userNo: string,
-  displayName: string,
+  realName: string,
   phoneMasked: string,
   orgId: number,
   post: string,
@@ -73,7 +73,7 @@ function u(
   return {
     id,
     userNo,
-    displayName,
+    realName,
     phoneMasked,
     orgId,
     post,
@@ -111,13 +111,6 @@ function toView(user: MockUser): Record<string, unknown> {
     delete view.post
   }
   return view
-}
-
-function maskName(realName: string): string {
-  if (realName.length <= 1) {
-    return realName
-  }
-  return `${realName[0]}${'*'.repeat(realName.length - 1)}`
 }
 
 function maskPhone(phone: string): string {
@@ -179,14 +172,13 @@ export default [
       const problems: string[] = []
       if (!userNo) problems.push('userNo: 用户账号不能为空')
       if (!realName) problems.push('realName: 真实姓名不能为空')
-      if (!phone) problems.push('phone: 手机号不能为空')
-      if (!/^1[3-9]\d{9}$/.test(phone)) problems.push('phone: 手机号格式不正确')
+      if (phone && !/^1[3-9]\d{9}$/.test(phone)) problems.push('phone: 手机号格式不正确')
       if (!Number.isInteger(orgId)) problems.push('orgId: 所属组织不能为空')
       if (problems.length > 0) {
         return fail(1001, problems.join('; '))
       }
       if (users.some((item) => item.userNo === userNo)) {
-        return fail(1001, 'userNo: 用户账号已存在')
+        return fail(3009, `账号已存在: ${userNo}`)
       }
       if (!orgs.some((item) => item.id === orgId && item.isDeleted === 0)) {
         return fail(1002, '所属组织不存在')
@@ -194,8 +186,8 @@ export default [
       const created: MockUser = {
         id: nextUserId++,
         userNo,
-        displayName: maskName(realName),
-        phoneMasked: maskPhone(phone),
+        realName,
+        phoneMasked: phone ? maskPhone(phone) : null,
         orgId,
         post: post || undefined,
         accountStatus: 'NORMAL',

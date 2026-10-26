@@ -5,6 +5,8 @@ import { listRoles } from '@/api/role.api'
 import { useDict } from '@/composables/useDict'
 import { RoleType, type RoleTypeCode } from '@/constants/enums'
 import type { Role } from '@/types/role.types'
+import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { dateTimeColumnFormatter } from '@/utils/time'
 
 /**
  * 角色列表卡片（契约 8.5）：后端全量返回不分页；roleType 前端即时过滤（小数据量）。
@@ -67,7 +69,7 @@ defineExpose({ reload: loadRoles })
           <h2 class="role-list-card__title">角色列表</h2>
           <p class="role-list-card__hint">全量 {{ roles.length }} 个 · 点击行查看详情与互斥配置</p>
         </div>
-        <el-button type="primary" :icon="Plus" @click="emit('create')">新建角色</el-button>
+        <el-button v-perm="FP.ROLE_CREATE" type="primary" :icon="Plus" @click="emit('create')">新建角色</el-button>
       </div>
     </template>
 
@@ -111,7 +113,7 @@ defineExpose({ reload: loadRoles })
       <el-table-column label="描述" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ row.description ?? '—' }}</template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="创建时间" min-width="160" />
+      <el-table-column prop="createdAt" label="创建时间" min-width="160" :formatter="dateTimeColumnFormatter" />
     </el-table>
   </el-card>
 </template>

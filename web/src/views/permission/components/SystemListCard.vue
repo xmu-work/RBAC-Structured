@@ -4,6 +4,8 @@ import { Plus } from '@element-plus/icons-vue'
 import { listSystems } from '@/api/system.api'
 import { useDict } from '@/composables/useDict'
 import type { System } from '@/types/system.types'
+import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { dateTimeColumnFormatter } from '@/utils/time'
 
 /** 接入系统列表卡片（契约 8.7）：系统登记入口；系统编辑/停用 [缺] 端点 */
 const props = defineProps<{ reloadSignal: number }>()
@@ -48,7 +50,7 @@ watch(
           <h2 class="system-list-card__title">接入系统</h2>
           <p class="system-list-card__hint">共 {{ systems.length }} 个系统接入统一权限平台</p>
         </div>
-        <el-button type="primary" :icon="Plus" @click="emit('create')">登记系统</el-button>
+        <el-button v-perm="FP.SYSTEM_CREATE" type="primary" :icon="Plus" @click="emit('create')">登记系统</el-button>
       </div>
     </template>
 
@@ -75,7 +77,7 @@ watch(
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="接入时间" min-width="160" />
+      <el-table-column prop="createdAt" label="接入时间" min-width="160" :formatter="dateTimeColumnFormatter" />
     </el-table>
   </el-card>
 </template>

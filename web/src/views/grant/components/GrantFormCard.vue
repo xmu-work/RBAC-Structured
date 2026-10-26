@@ -10,6 +10,7 @@ import type { BusinessError } from '@/utils/request'
 import { toFieldErrors } from '@/utils/formErrors'
 import type { Role } from '@/types/role.types'
 import type { User } from '@/types/user.types'
+import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
 
 /**
  * 授予表单卡（契约 8.6）：选人 → 单角色授予（后端不支持批量）。
@@ -136,11 +137,11 @@ async function submit(): Promise<void> {
           <el-option
             v-for="user in users"
             :key="user.id"
-            :label="`${user.userNo} · ${user.displayName ?? ''}`"
+            :label="`${user.userNo} · ${user.realName}`"
             :value="user.id"
             :disabled="user.accountStatus !== 'NORMAL'"
           >
-            <span>{{ user.userNo }} · {{ user.displayName ?? '—' }}</span>
+            <span>{{ user.userNo }} · {{ user.realName }}</span>
             <span class="grant-form-card__user-status">{{ user.accountStatus }}</span>
           </el-option>
         </el-select>
@@ -174,7 +175,7 @@ async function submit(): Promise<void> {
         />
       </el-form-item>
       <el-form-item class="grant-form-card__submit">
-        <el-button type="primary" :icon="Promotion" :loading="submitting" @click="submit">
+        <el-button v-perm.disable="FP.GRANT_CREATE" type="primary" :icon="Promotion" :loading="submitting" @click="submit">
           授予
         </el-button>
       </el-form-item>
