@@ -35,7 +35,7 @@ public class IamToken {
     @Column(name = "expire_at", nullable = false)
     private LocalDateTime expireAt;
 
-    @Column(name = "revoked", nullable = false)
+    @Column(name = "revoked", nullable = false, columnDefinition = "tinyint")
     private Integer revoked;
 
     @Column(name = "revoked_at")

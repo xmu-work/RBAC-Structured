@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1090" viewBox="0 0 2000 1090" font-family="PingFang SC,Microsoft YaHei,SimHei,sans-serif">
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#333"/></marker><marker id="arrb" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#1f4e8c"/></marker></defs>
+<rect width="2000" height="1090" fill="#ffffff"/>
+<text x="1000.0" y="42" text-anchor="middle" font-size="26" font-weight="bold">统一应用软件权限管理系统 — 0级数据流图（系统边界）</text>
+<circle cx="1000" cy="540" r="190" fill="#e8f1fc" stroke="#1f4e8c" stroke-width="2"/>
+<text x="1000" y="530" text-anchor="middle" font-size="20" font-weight="bold" fill="#13396b">0 统一应用软件权限管理系统</text>
+<text x="1000" y="562" text-anchor="middle" font-size="15" font-weight="normal" fill="#33507a">RBAC 统一身份与权限平台（IAM）</text>
+<rect x="120" y="200" width="240" height="90" fill="#fff" stroke="#222" stroke-width="1.8"/>
+<text x="240.0" y="239.0" text-anchor="middle" font-size="16" font-weight="normal" fill="#111">E1 普通员工</text>
+<text x="240.0" y="261.0" text-anchor="middle" font-size="14" font-weight="normal" fill="#111">（10000 名用户）</text>
+<rect x="120" y="495" width="240" height="90" fill="#fff" stroke="#222" stroke-width="1.8"/>
+<text x="240.0" y="534.0" text-anchor="middle" font-size="16" font-weight="normal" fill="#111">E4 HR人力资源系统</text>
+<text x="240.0" y="556.0" text-anchor="middle" font-size="14" font-weight="normal" fill="#111">（人事事件源）</text>
+<rect x="120" y="850" width="240" height="90" fill="#fff" stroke="#222" stroke-width="1.8"/>
+<text x="240.0" y="889.0" text-anchor="middle" font-size="16" font-weight="normal" fill="#111">E2 管理员</text>
+<text x="240.0" y="911.0" text-anchor="middle" font-size="14" font-weight="normal" fill="#111">（信息中心/审批人）</text>
+<rect x="1640" y="495" width="260" height="90" fill="#fff" stroke="#222" stroke-width="1.8"/>
+<text x="1770.0" y="534.0" text-anchor="middle" font-size="16" font-weight="normal" fill="#111">E3 18套业务系统</text>
+<text x="1770.0" y="556.0" text-anchor="middle" font-size="14" font-weight="normal" fill="#111">OA/PMIS/财务/安全…</text>
+<path d="M360,215 L920,215 L920,360" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="612" y="194" width="57" height="18" fill="#fff" opacity="0.9"/>
+<text x="640" y="207" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">登录凭证</text>
+<path d="M870,375 L870,245 L360,245" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="624" y="224" width="31" height="18" fill="#fff" opacity="0.9"/>
+<text x="640" y="237" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">令牌</text>
+<path d="M240,200 L240,150 L1000,150 L1000,350" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="534" y="129" width="172" height="18" fill="#fff" opacity="0.9"/>
+<text x="620" y="142" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">前端权限查询(菜单/按钮)</text>
+<path d="M1080,365 L1080,120 L200,120 L200,200" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="560" y="99" width="121" height="18" fill="#fff" opacity="0.9"/>
+<text x="620" y="112" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">菜单/按钮权限集合</text>
+<path d="M840,440 L300,440 L300,290" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="529" y="419" width="82" height="18" fill="#fff" opacity="0.9"/>
+<text x="570" y="432" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">权限变更推送</text>
+<path d="M360,540 L810,540" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="562" y="519" width="57" height="18" fill="#fff" opacity="0.9"/>
+<text x="590" y="532" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">人事事件</text>
+<path d="M360,870 L860,680" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="512" y="747" width="95" height="18" fill="#fff" opacity="0.9"/>
+<text x="560" y="760" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">账号/授权指令</text>
+<path d="M880,700 L380,890" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="652" y="799" width="57" height="18" fill="#fff" opacity="0.9"/>
+<text x="680" y="812" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">操作结果</text>
+<path d="M360,905 L900,715" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="647" y="855" width="146" height="18" fill="#fff" opacity="0.9"/>
+<text x="720" y="868" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">组织/角色/功能点配置</text>
+<path d="M930,728 L360,925" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="532" y="887" width="57" height="18" fill="#fff" opacity="0.9"/>
+<text x="560" y="900" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">配置结果</text>
+<path d="M240,940 L240,990 L1000,990 L1000,730" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="599" y="969" width="82" height="18" fill="#fff" opacity="0.9"/>
+<text x="640" y="982" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">日志查询条件</text>
+<path d="M1080,715 L1080,1020 L200,1020 L200,940" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="599" y="999" width="82" height="18" fill="#fff" opacity="0.9"/>
+<text x="640" y="1012" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">日志查询结果</text>
+<path d="M1640,515 L1185,515" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="1350" y="494" width="121" height="18" fill="#fff" opacity="0.9"/>
+<text x="1410" y="507" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">鉴权请求(带令牌)</text>
+<path d="M1185,555 L1640,555" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="1350" y="562" width="121" height="18" fill="#fff" opacity="0.9"/>
+<text x="1410" y="575" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">鉴权结果/权限集合</text>
+<path d="M1150,680 L1150,640 L1770,640 L1770,585" fill="none" stroke="#333" stroke-width="1.4" marker-end="url(#arr)"/>
+<rect x="1432" y="619" width="57" height="18" fill="#fff" opacity="0.9"/>
+<text x="1460" y="632" text-anchor="middle" font-size="13" font-weight="normal" fill="#b03030">变更回调</text>
+<rect x="60" y="1055" width="22" height="15" rx="4" fill="#e8f1fc" stroke="#1f4e8c"/>
+<text x="90" y="1068" font-size="14">系统</text>
+<rect x="158" y="1055" width="22" height="15" fill="#fff" stroke="#222"/>
+<text x="188" y="1068" font-size="14">外部实体</text>
+<text x="284" y="1068" font-size="14" fill="#b03030">红字为数据流名称，与 1 级图外部数据流一一对应</text></svg>

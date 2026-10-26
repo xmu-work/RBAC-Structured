@@ -1,0 +1,840 @@
+= 统一应用软件权限管理系统 详细设计说明书
+:doctype: book
+:toc: left
+:toclevels: 3
+
+[cols="1,3"]
+|===
+| 项目 | 内容
+
+| 文档名称 | 统一应用软件权限管理系统 详细设计说明书
+
+| 项目全称 | 统一应用软件权限管理系统（RBAC 统一身份与权限平台）
+
+| 文档版本 | V2.0
+
+| 修订说明 | V1.0（2026-10-20）：《概要/结构化设计》首次发布。V2.0（2026-10-26）：整理为《详细设计说明书》——重画 0 级、1 级数据流图并修正父子图不平衡与规则违反；新增 2 级数据流图（P2、P3）与模块结构图；新增 RBAC0 各模块详细设计；将原第 9 章评审结论并入正文；架构描述改为与实际代码一致，目标架构单独标注
+
+| 编制单位 | 信息中心 / 系统架构组
+
+| 上游依据 | 《需求规格说明书》V1.1、《数据库设计说明书》V1.2
+
+| 配套文档 | 《API 设计说明书》（本文档的接口部分）、《数据库设计说明书》（数据部分）、《ER 图实体说明》
+
+| 适用阶段 | 详细设计（第一次检查：RBAC0，面向功能实现）
+
+| 密级 | 内部
+|===
+
+== 1 引言
+
+=== 1.1 编写目的
+
+本文档在《需求规格说明书》的基础上，用结构化（面向功能）设计方法给出系统的数据流分析、模块划分、模块结构图和 RBAC0 各模块的详细设计，作为编码、测试和后续两次迭代（RBAC1、RBAC3）的依据。
+
+=== 1.2 范围与标注
+
+文档同时描述两层内容：
+
+* *目标设计*：完整的统一权限平台（SSO、数据权限、审计、变更推送等），对应需求文档中的全部需求；
+* *当前实现*：第一次检查已实现的 RBAC0 后端。第 6 章只写已实现模块，内容与 `src/main/java/com/iam/platform` 下的代码一致。
+
+实现状态的标注与《需求规格说明书》1.4.2 相同：*已实现*、*部分实现*、*RBAC1 阶段*、*RBAC3 阶段*、*扩展*。
+
+=== 1.3 设计方法
+
+课程要求第一次检查用*面向功能*的方式实现 RBAC0，第二、三次检查再分别用面向功能和面向对象两种方式实现 RBAC1、RBAC3。本文档按课件《结构化软件设计》的路线进行：
+
+. *需求 → 数据流图*：从用例和需求条目画出 0 级（系统边界）、1 级（主要加工）、2 级（加工分解）数据流图，检查父子图平衡和 DFD 规则（第 4 章）。
+. *数据流图 → 模块结构图*：对 2 级图做*事务分析*（P2 按请求类型分派）和*变换分析*（P3 输入→变换→输出），导出调用层次（第 5.3 节）。
+. *模块评价*：用课件的内聚、耦合分级审查模块边界（第 5.4 节）。
+. *模块详细设计*：对每个 RBAC0 模块给出接口、输入—处理—输出、异常与数据访问（第 6 章）。
+
+选择面向功能的理由与这种方法在本系统中暴露的问题，见第 8 章。
+
+=== 1.4 文档关系
+
+[cols="1,3"]
+|===
+| 文档 | 与本文档的关系
+
+| 01 需求规格说明书 | 上游依据。本文档引用的 FR / NFR / UC 编号均指该文档
+
+| 03 数据库设计说明书 | 数据存储 D1～D7 对应的表结构、索引、建表脚本
+
+| 04 API 设计说明书 | 本文档第 6 章各模块对外接口的 HTTP 形式（路径、参数、响应、错误码）
+
+| 05 ER 图实体说明 | 实体与业务板块的对照
+|===
+
+== 2 设计目标与设计原则
+
+=== 2.1 设计目标
+
+[cols="3,2,2"]
+|===
+| 目标 | 对应需求 | 当前状态
+
+| 统一身份与统一鉴权：一套平台承载 10000 名员工的统一账号，向 18 套业务系统提供认证与统一授权 | FR-01、FR-31～FR-35、NFR-06 | 部分实现（统一账号、登录、令牌、鉴权接口已实现；SSO 跳转为扩展）
+
+| 功能权限可判定、前后端同源：系统→模块→功能点→操作四级结构，前端权限查询与后端鉴权使用同一判定逻辑 | FR-17～FR-19、FR-36～FR-39 | 已实现
+
+| 双维度权限：功能权限与数据权限联合判定 | FR-22～FR-26 | RBAC3 阶段
+
+| 变更即时生效：权限变更后无需重新登录 | FR-40、FR-43 | 部分实现（后端实时判定；推送为扩展）
+
+| 审计永久可追溯：日志只追加、永久保存 | FR-44～FR-47、NFR-09 | RBAC3 阶段
+
+| 敏感信息保护：姓名、电话加密存储、展示脱敏 | FR-48～FR-50、NFR-01 | 部分实现
+
+| 可扩展接入：第 19 套系统只需登记与配置 | FR-35、NFR-13 | 已实现
+|===
+
+=== 2.2 设计原则
+
+[cols="1,3"]
+|===
+| 原则 | 在本系统中的落地
+
+| 按功能分解（结构化） | 模块按"系统要做什么"划分：认证、账号、角色、功能权限、授权、鉴权……；每个模块的处理写成"校验 → 处理 → 落库"的线性过程，实体类只承载数据
+
+| 分级实现 RBAC | RBAC0：用户—角色—权限三层绑定（本次实现）；RBAC1 增加角色继承（FR-13）；RBAC2 增加角色互斥等约束（FR-14）；RBAC3 = RBAC1 + RBAC2。角色继承与互斥不属于 RBAC0
+
+| 高内聚低耦合 | 一个 Service 只负责一类业务数据；Service 之间只传简单数据（用户 ID、角色 ID），不传控制标志；横切能力（加密、异常、响应包）集中在独立组件
+
+| 最小权限 / 默认拒绝 | 新用户无角色即无任何功能点（NFR-02）；管理端 API 登记为功能点后，未授权一律 403
+
+| 后端独立鉴权 | 每个请求在拦截器中认证并鉴权，不依赖前端隐藏（FR-37）
+
+| 前后端同源 | 前端权限查询接口与后端鉴权调用同一个 `DecisionService`（FR-38）
+
+| 账号与数据不物理删除 | 封存、回收都改状态，保留历史（FR-05）
+|===
+
+== 3 总体结构
+
+=== 3.1 实际分层结构（RBAC0 已实现）
+
+RBAC0 后端是一个 Spring Boot 应用，分为三层加一个公共包，依赖方向自上而下：
+
+----
+com.iam.platform
+├── interfaces        接口层：接收 HTTP 请求、认证鉴权拦截、参数转换
+│   ├── admin         管理端 Controller（Auth / User / Role / System / Org / Audit）
+│   ├── openapi       开放鉴权接口（OpenApiController）
+│   ├── AuthInterceptor  认证与鉴权拦截器
+│   └── WebConfig     拦截器注册（除 /auth/login 外全部拦截）
+├── application       应用服务层：按功能划分的业务过程（规则写在这里）
+│   ├── auth          M01 统一认证：AuthService
+│   ├── account       M02 账号管理：AccountService、UserView
+│   ├── role          M04 角色管理：RoleService
+│   ├── permission    M05 功能权限：FunctionPermissionService（M06 DataPermissionService 待实现）
+│   ├── grant         M07 授权管理：GrantService
+│   ├── decision      M08 鉴权决策：DecisionService
+│   ├── organization  M03 组织机构（待实现）
+│   └── audit         M09 审计日志（待实现）
+├── infrastructure    基础设施层
+│   ├── persistence   JPA 实体（14 个）与 Repository
+│   ├── crypto        M11 加密脱敏组件：CryptoComponent
+│   └── cache         权限缓存组件（RBAC3 阶段启用）
+└── common            统一响应 Result / PageResult、错误码 ErrorCode、业务异常与全局异常处理、枚举
+----
+
+分层约束：
+
+* `interfaces → application → infrastructure` 单向依赖，`common` 被各层使用；
+* Controller 不写业务规则，只做参数接收、调用 Service、包装 `Result`；
+* 业务规则全部在 application 层的过程方法中（面向功能的体现），实体类只有字段与 get/set；
+* *不设领域层*：领域层是面向对象 / DDD 的做法，在 RBAC1 的面向对象版本中再引入，用于对比两种方法。
+
+=== 3.2 目标部署结构（演进方向）
+
+目标系统按调用频次和安全边界拆分为多个组件，RBAC0 阶段全部合并在一个应用中：
+
+[cols="1,2,1,1"]
+|===
+| 组件 | 职责 | 对应需求 | 当前状态
+
+| 统一认证服务 | 登录认证、SSO 跳转、令牌签发/续期/吊销 | FR-31、FR-32、FR-34 | 部分实现（在单体应用内）
+
+| 授权决策服务（PDP） | 令牌校验、权限查询、功能∩数据∩状态联合决策；无状态、可水平扩展 | FR-24、FR-33、FR-37 | 部分实现（在单体应用内）
+
+| 权限管理后台 | 账号、组织、角色、功能权限、数据权限、授权回收的可视化管理 | FR-01～FR-30 | 部分实现
+
+| 审计服务 | 日志只追加写入、查询、导出、归档 | FR-44～FR-47 | RBAC3 阶段
+
+| 通知 / 推送服务 | 变更事件发布、WebSocket 推送、业务系统回调 | FR-40、FR-43 | 扩展
+
+| Redis 集群 | 决策缓存、分布式锁 | NFR-08、FR-41 | RBAC3 阶段
+
+| 业务系统 SDK / 拦截器 | 18 套系统侧集成：令牌透传、调用鉴权接口、本地短缓存降级 | FR-33、NFR-11 | 扩展
+|===
+
+拆分的理由见 5.2 节决策 D2、D3。
+
+== 4 数据流分析
+
+=== 4.1 数据流图元素
+
+[cols="1,2,3"]
+|===
+| 编号 | 名称 | 说明
+
+| E1 | 普通员工 | 登录、查询自己的菜单/按钮权限
+
+| E2 | 管理员 | 系统管理员、部门经理、项目经理等，提交账号、授权、配置、日志查询请求
+
+| E3 | 18 套业务系统 | 携带令牌调用鉴权接口，接收变更回调
+
+| E4 | HR 人力资源系统 | 人事事件源（入职、调岗、离职）
+
+| P1 | 登录认证 | 核对账号密码、签发令牌（M01）
+
+| P2 | 账号与授权管理 | 建立账号、变更账号状态与封存、授予/撤销用户角色、绑定/解绑角色功能点、数据范围授权（M02、M07）
+
+| P3 | 鉴权决策 | 令牌认证、账号状态校验、计算功能点集合、数据范围判定、生成判定结果（M01、M08）
+
+| P4 | 日志审计 | 写入与查询审计日志（M09）
+
+| P5 | 变更通知 | 权限变更后使决策缓存失效、推送前端、回调业务系统（M10）
+
+| P6 | 组织与角色维护 | 维护组织树、角色定义、系统/模块/功能点登记（M03、M04、M05、M12）
+
+| D1 | 账号库 | `iam_user`
+
+| D2 | 组织库 | `iam_org`
+
+| D3 | 角色权限库 | `iam_role`、`iam_user_role`、`iam_system`、`iam_module`、`iam_function_point`、`iam_role_function`
+
+| D4 | 数据权限库 | `iam_data_scope`、`iam_role_data_scope`
+
+| D5 | 令牌库 | `iam_token`
+
+| D6 | 审计日志库 | `iam_audit_log`、`iam_permission_change_log`
+
+| D7 | 决策缓存 | Redis，不建表（RBAC3 阶段）
+|===
+
+=== 4.2 0 级数据流图（系统边界）
+
+.0 级数据流图
+image::数据流图_0级图.png[0级数据流图,width=100%]
+
+0 级图只画系统边界和外部实体。每个外部实体与系统之间的数据流，都在 1 级图中以同名数据流出现：
+
+[cols="1,3,3"]
+|===
+| 外部实体 | 流入系统 | 流出系统
+
+| E1 普通员工 | 登录凭证、前端权限查询 | 令牌、菜单/按钮权限集合、权限变更推送
+
+| E2 管理员 | 账号/授权指令、组织/角色/功能点配置、日志查询条件 | 操作结果、配置结果、日志查询结果
+
+| E3 业务系统 | 鉴权请求（带令牌） | 鉴权结果/权限集合、变更回调
+
+| E4 HR 系统 | 人事事件 | —
+|===
+
+=== 4.3 1 级数据流图（主要加工）
+
+.1 级数据流图
+image::数据流图_1级图.png[1级数据流图,width=100%]
+
+1 级图把系统分解为 P1～P6 六个加工和 D1～D7 七个数据存储。主要数据流：
+
+. *登录*：E1 提交登录凭证 → P1 从 D1 读取账号状态与密码哈希 → 写入 D5 令牌记录 → 向 E1 返回令牌，向 P4 发送登录日志。
+. *账号与授权*：E2 提交账号/授权指令、E4 推送人事事件 → P2 读写 D1（账号信息与状态）、读写 D3（用户-角色、角色-功能点绑定）、写 D4（数据范围授权）、写 D5（吊销令牌）→ 向 E2 返回操作结果，向 P5 发布变更事件，向 P4 发送授权/封存日志。
+. *配置*：E2 提交组织/角色/功能点配置 → P6 写 D2（组织树）、写 D3（角色与功能点定义）→ 返回配置结果。
+. *鉴权*：E3 携带令牌发起鉴权请求、E1 发起前端权限查询 → P3 读取 D5 令牌记录、D1 账号状态、D3 用户角色与功能点、D4 数据范围，读写 D7 决策缓存 → 向 E3 返回鉴权结果，向 E1 返回菜单/按钮权限集合，向 P4 发送鉴权日志。
+. *变更通知*：P5 接收变更事件 → 使 D7 中的决策缓存失效 → 回调 E3，向 E1 推送权限变更。
+. *审计*：P4 把审计记录写入 D6；E2 提交日志查询条件 → P4 从 D6 读取历史日志 → 返回日志查询结果。
+
+=== 4.4 2 级数据流图
+
+==== 4.4.1 P2 账号与授权管理
+
+.P2 账号与授权管理 2 级数据流图
+image::数据流图_2级图_P2账号与授权管理.png[P2 2级数据流图,width=100%]
+
+P2 分解为 5 个子加工，每个子加工对应一个 Service 方法：
+
+[cols="1,2,2"]
+|===
+| 子加工 | 处理 | 实现
+
+| P2.1 建立账号 | 校验账号唯一 → 加密姓名电话、哈希密码 → 写入 D1 | `AccountService.createUser`
+
+| P2.2 变更账号状态/封存 | 读当前状态 → 写新状态 → 非正常状态吊销 D5 中全部令牌 → 封存时回收 D3 中全部用户角色 | `AccountService.changeStatus`
+
+| P2.3 授予/撤销用户角色 | 读 D1 账号状态、D3 角色状态与已有绑定 → 写 D3 用户-角色绑定 | `GrantService.grantRole / revokeRole`
+
+| P2.4 绑定/解绑角色功能点 | 读 D3 角色与功能点 → 写 D3 角色-功能点绑定 | `FunctionPermissionService.bindRoleFunctions / unbindRoleFunctions`
+
+| P2.5 数据范围授权 | 写 D4 角色-数据范围授权 | RBAC3 阶段（`DataPermissionService`）
+|===
+
+*与父图的平衡核对*：
+
+[cols="2,3"]
+|===
+| 1 级图中 P2 的数据流 | 2 级图中的对应
+
+| E2 → 账号/授权指令 | 建账号请求 + 状态变更请求 + 授予/撤销请求 + 绑定/解绑请求 + 数据范围授权请求
+
+| P2 → E2 操作结果 | P2.1～P2.5 的操作结果
+
+| E4 → 人事事件 | 入职事件（→P2.1）+ 离职/调岗事件（→P2.2），均为扩展
+
+| D1 ↔ P2 | 账号是否已存在、当前账号状态、账号状态（读）；账号记录、新账号状态（写）
+
+| D3 ↔ P2 | 角色状态/已有绑定、角色/功能点（读）；回收用户角色、用户-角色绑定、角色-功能点绑定（写）
+
+| P2 → D4 / D5 | 角色-数据范围授权（P2.5）/ 吊销令牌（P2.2）
+
+| P2 → P5 / P4 | P2.2～P2.5 的变更事件；P2.1～P2.5 的账号/封存/授权/绑定日志
+|===
+
+==== 4.4.2 P3 鉴权决策
+
+.P3 鉴权决策 2 级数据流图
+image::数据流图_2级图_P3鉴权决策.png[P3 2级数据流图,width=100%]
+
+P3 是典型的*变换型*数据流：
+
+* *输入部分*：P3.1 令牌认证（读 D5）把"带令牌的请求"变换为"用户 ID"；P3.2 账号状态校验（读 D1）过滤掉非正常账号；
+* *变换中心*：P3.3 计算功能点集合（读 D3）；P3.4 数据范围判定（读 D4，RBAC3 阶段）；
+* *输出部分*：P3.5 生成判定结果，向 E3 返回鉴权结果、向 E1 返回菜单/按钮权限集合、向 P4 发送鉴权日志。
+
+*与父图的平衡核对*：1 级图中 P3 的输入（E3 鉴权请求、E1 前端权限查询、D5 令牌记录、D1 账号状态、D3 用户角色/功能点、D4 数据范围、D7 决策缓存）与输出（E3 鉴权结果/权限集合、E1 菜单/按钮权限集合、P4 鉴权日志）在 2 级图中全部出现，没有新增或丢失的外部数据流。子加工之间新增的"用户 ID""正常用户 ID""功能点集合"等是 P3 内部数据流。
+
+=== 4.5 DFD 规则符合性检查
+
+按课件《结构化软件设计》中的 DFD 规则逐条检查（V1.0 中发现的问题已在本版修正）：
+
+[cols="2,2,3"]
+|===
+| 规则 | 检查结果 | V1.0 问题及修正
+
+| 每个加工有输入也有输出 | 符合 | P4 原先只写不读、只出不入，现拆出"日志查询条件 → P4 → 日志查询结果"
+
+| 外部实体不能直接连数据存储 | 符合 | V1.0 中"日志查询/导出"从 E2 直接指向 D6，现改为经过 P4
+
+| 每个数据存储既有写入也有读出 | 符合 | V1.0 中 D1 账号库没有任何加工写入（建账号、封存都没画），现增加 P2 → D1；D7 只写不读，现改为 P3 读写、P5 失效
+
+| 父子图平衡 | 符合 | V1.0 中 0 级图缺 E1 的权限查询、推送数据流，又多出"系统 → E2 日志查询"，现两图逐条对应（4.2 节）
+
+| 数据流有名称、只描述数据不描述控制 | 符合 | 锁、事务顺序等实现细节不进 DFD，放在第 7 章
+
+| 读写方向正确 | 符合 | V1.0 中多条"读"数据流箭头指向数据存储，现统一为"存储 → 加工"表示读
+|===
+
+=== 4.6 数据字典（主要数据流）
+
+[cols="1,3"]
+|===
+| 数据流 | 组成
+
+| 登录凭证 | 账号（user_no）+ 密码 +［验证码 ID + 验证码］+［客户端 IP］
+
+| 令牌 | JWT = 令牌 ID（jti）+ 用户 ID（sub）+ 账号（userNo）+ 签发方（iss）+ 签发时间（iat）+ 过期时间（exp）+ 签名（HMAC-SHA384）
+
+| 令牌记录 | 令牌 ID + 用户 ID + 系统编码 + 令牌哈希 + 签发时间 + 过期时间 + 是否吊销 + 状态
+
+| 账号/授权指令 | 建账号请求 \| 状态变更请求 \| 授予/撤销请求 \| 绑定/解绑请求 \| 数据范围授权请求
+
+| 建账号请求 | 账号 + 姓名 + 所属组织 +［密码］+［电话］+［岗位］
+
+| 状态变更请求 | 用户 ID + 目标状态（NORMAL/DISABLED/SEALED/LOCKED）+［原因］
+
+| 授予/撤销请求 | 用户 ID + 角色 ID +［失效时间］+［授权人］+［授权原因］
+
+| 绑定/解绑请求 | 角色 ID + 功能点 ID 列表 + 授予的操作（12 种取值之一）
+
+| 鉴权请求 | 令牌 + 用户 ID + 系统编码 + 功能点 ID（或 API 路径模板 + HTTP 方法）
+
+| 功能点集合 | {功能点 ID}
+
+| 鉴权结果 | 是否允许 \| 错误码（401 类：未登录/令牌无效/过期/吊销；403 类：无功能权限）
+
+| 操作结果 | 统一响应包 = 业务码 + 信息 +［数据］+ 时间戳
+|===
+
+== 5 模块设计
+
+=== 5.1 模块清单
+
+[cols="1,2,3,2,2"]
+|===
+| 编号 | 模块 | 职责 | 依赖 | 实现 / 状态
+
+| M01 | 统一认证 | 登录认证、令牌签发/校验/吊销；（扩展）SSO 跳转、续期、防重放 | M11 | `AuthService`、`AuthInterceptor`；部分实现
+
+| M02 | 用户与账号管理 | 账号建立、状态管理（正常/停用/封存/锁定）、账号查询；（扩展）批量导入 | M01（吊销令牌）、M07（回收角色）、M11 | `AccountService`；已实现
+
+| M03 | 组织机构管理 | 多级组织树、节点移动、组织-数据范围映射 | 无 | `OrganizationService`；RBAC3 阶段
+
+| M04 | 角色管理 | 角色定义；继承（RBAC1）；互斥（RBAC3） | 无 | `RoleService`；部分实现
+
+| M05 | 功能权限管理 | 系统→模块→功能点四级登记、API 映射、角色-功能点绑定/解绑 | M04（角色状态） | `FunctionPermissionService`；已实现
+
+| M06 | 数据权限管理 | 数据范围授权、岗位默认范围、临时授权、本人/本项目判定 | M03、M04 | `DataPermissionService`；RBAC3 阶段
+
+| M07 | 授权管理 | 用户-角色授予/撤销/全部回收；（扩展）申请-审批-执行 | M04（角色状态） | `GrantService`；已实现
+
+| M08 | 鉴权决策 | 计算用户在某系统的功能点集合、单点/批量判定；（RBAC3）数据范围判定、决策缓存 | 无（只读数据） | `DecisionService`；部分实现
+
+| M09 | 审计日志 | 日志只追加写入、查询、导出、防篡改 | 无 | `AuditService`；RBAC3 阶段
+
+| M10 | 变更通知与缓存失效 | 变更事件、缓存失效、推送、业务系统回调 | M08 | 扩展
+
+| M11 | 加密脱敏组件 | 字段加解密、密码哈希、检索哈希、展示脱敏 | 无 | `CryptoComponent`；已实现
+
+| M12 | 业务系统接入 | 系统登记（编码、回调地址、密钥）、第 19 套系统扩展接入 | M05 | 系统登记并入 `FunctionPermissionService.registerSystem`；部分实现
+|===
+
+说明：V1.0 中"M02 依赖 M08（授权）"为笔误，授权模块是 M07，已改正。
+
+=== 5.2 模块划分决策
+
+[cols="1,2,1,4"]
+|===
+| 编号 | 决策问题 | 结论 | 理由
+
+| D1 | 用户管理与组织管理是否合并？ | 拆分（M02 / M03） | 组织树是稳定主数据，被数据权限、审计快照多方复用；账号生命周期变化频繁且与 HR 事件相关。合并会让组织变更牵动账号写入
+
+| D2 | 认证与鉴权决策是否拆分？ | 拆分（M01 / M08） | 认证回答"你是谁"，决策回答"你能做什么"；决策是业务系统高频调用路径（NFR-07），需要无状态、可单独扩展。RBAC0 中二者已是两个 Service，拦截器分别调用
+
+| D3 | 审计日志是否独立？ | 独立（M09） | 只追加、永久保存的存储策略与业务库不同；写日志不能阻塞鉴权主链路；所有模块都写日志但审计不能反向依赖业务模块
+
+| D4 | 数据权限是否独立于功能权限？ | 独立（M05 / M06） | 两个维度正交（FR-24 要求联合判定而非合并）；数据权限依赖组织树和岗位规则，变化频率与功能点登记不同
+
+| D5 | 授权管理是否并入角色管理？ | 拆分（M04 / M07） | 角色管理维护"角色是什么"，授权管理维护"谁在何时被授予了什么"；授权是高频写操作，角色定义是低频配置
+
+| D6 | 通知是否并入授权管理？ | 拆分（M07 / M10） | 授权只负责"产生变更"，不关心"如何送达"；新增消费方不改授权代码
+
+| D7 | 加密脱敏是否独立？ | 独立组件（M11） | 被账号、登录、日志导出多处复用；密钥管理需要独立边界。作为本地组件而非服务，避免每次脱敏走网络
+
+| D8 | 接入登记是否并入功能权限？ | RBAC0 合并，扩展阶段拆分 | RBAC0 只需登记系统编码和名称，直接放在 `FunctionPermissionService.registerSystem`；接入密钥、回调地址、适配层（第 19 套系统）实现时再拆为 M12
+
+| D9 | 令牌是否并入账号表？ | 拆分存储（`iam_token`） | 令牌有独立生命周期（签发、吊销），读写频次远高于账号；令牌只存哈希
+
+| D10 | 鉴权判定是否单独成模块？ | 独立（M08） | 判定规则是最容易变化的设计决策（RBAC1 加继承、RBAC3 加数据范围和缓存），集中在一个模块里，变化只影响 M08
+|===
+
+*原评审结论的处理*（V1.0 第 9 章提出、本版并入）：
+
+[cols="3,1,3"]
+|===
+| 评审建议 | 处理 | 说明
+
+| M07 只对外暴露 `grant()` / `revoke()` 窄接口，内部封装校验与落库 | 已采用 | `GrantService.grantRole / revokeRole`，调用方不需要知道校验顺序
+
+| M08 判定逻辑集中、前后端复用 | 已采用 | 拦截器、开放接口都调用 `DecisionService`
+
+| 把 M06 的"判定"与"授权存储"分开 | RBAC3 阶段 | 实现数据权限时，判定函数放在 M06，M08 只调用
+
+| M10 拆成缓存失效 / 推送 / 回调三个处理器 | 扩展 | 实现通知时采用
+
+| M09 拆为写模型与读模型 | RBAC3 阶段 | 写：只追加；读：分页、导出
+
+| "明文查看授权"从 M11 上移到授权判定 | RBAC3 阶段 | M11 只做加解密与脱敏，不做业务判断
+
+| 为第 19 套系统定义适配层、为 HR 事件定契约 | 扩展 | 课程范围外
+|===
+
+=== 5.3 模块结构图
+
+.RBAC0 后端模块结构图
+image::模块结构图_RBAC0.png[RBAC0 模块结构图,width=100%]
+
+结构图由 2 级数据流图导出：
+
+* *事务分析（P2 → 左侧）*：P2 的输入是多种类型的管理请求，属于事务型数据流。事务中心是管理端 Controller（Spring MVC 按 URL 分派），每种请求对应一个事务模块：`createUser`、`changeStatus`、`grantRole`、`revokeRole`、`bind/unbindRoleFunctions`、`createRole`、`register*`。`changeStatus` 在封存时再调用 `revokeUserTokens` 和 `revokeAllRoles`。
+* *变换分析（P3 → 右侧）*：P3 是"输入 → 变换 → 输出"的变换型数据流。主控模块是拦截器 `preHandle`：输入分支 `authenticate`（令牌 → 用户 ID），变换分支 `findByApi`（API 模板 → 功能点）与 `hasPermission`（用户、系统、功能点 → 是否允许），输出分支为放行或抛出 401/403。`hasPermission` 下层的 `getUserFunctionPoints` 按 ①～⑤ 五步计算功能点集合，对应 2 级图的 P3.2、P3.3。
+* *P1 登录认证*：登录主控 `AuthService.login` 依次调用核对密码、校验账号状态、签发令牌、记录令牌。
+* *公共下层模块*：数据访问（JPA Repository）、加密脱敏、统一异常与响应、状态常量被多数模块调用，图中只在底部列出。
+
+=== 5.4 内聚与耦合分析（按 RBAC0 实际代码）
+
+==== 5.4.1 模块内聚
+
+[cols="1,1,3"]
+|===
+| 模块 | 内聚等级 | 理由
+
+| M01 `AuthService` | 功能内聚 | 登录、登出、令牌认证、吊销都围绕"令牌"这一件事；`login` 内部是顺序内聚（核对密码的结果是签发令牌的前提）
+
+| M02 `AccountService` | 通信内聚 | 建账号、查询、状态变更、视图转换都操作同一个"账号"数据
+
+| M04 `RoleService` | 通信内聚 | 围绕"角色"数据；互斥相关方法尚未实现
+
+| M05 `FunctionPermissionService` | 通信内聚（偏逻辑） | 系统、模块、功能点登记和角色-功能点绑定操作的是同一棵"功能权限树"，但系统登记属于接入（D8），将来拆出
+
+| M07 `GrantService` | 功能内聚 | 只负责用户-角色绑定的授予与回收
+
+| M08 `DecisionService` | 功能内聚 | 只做一件事：计算并判定功能权限；`getUserFunctionPoints` 内部五步为顺序内聚
+
+| M11 `CryptoComponent` | 功能内聚 | 只负责密码学相关处理
+
+| `AuthInterceptor` | 顺序内聚 | 认证的输出（用户 ID）是鉴权的输入
+|===
+
+==== 5.4.2 模块间耦合
+
+[cols="2,1,3"]
+|===
+| 交互关系 | 耦合等级 | 说明
+
+| `AccountService` → `AuthService.revokeUserTokens(userId)` | 数据耦合 | 只传用户 ID
+
+| `AccountService` → `GrantService.revokeAllRoles(userId)` | 数据耦合 | 只传用户 ID
+
+| `AuthInterceptor` → `AuthService.authenticate(token)` | 数据耦合 | 传令牌字符串、返回用户 ID
+
+| `AuthInterceptor` → `DecisionService.hasPermission(userId, systemCode, functionPointId)` | 数据耦合 | 只传三个简单值、返回布尔
+
+| `AuthInterceptor` → `FunctionPermissionService.findByApi` | 标记耦合 | 返回整个功能点实体，拦截器只用其中的 ID 和名称
+
+| Controller → 前端（返回 `IamRole`、`IamUserRole`、`IamSystem` 等实体） | 标记耦合 | 实体直出，表结构变化会影响接口；账号已改为 `UserView`，其余待改
+
+| 各 Service 共用 Repository 与数据库表 | 公共耦合（数据库） | 例如 `GrantService` 与 `DecisionService` 都读写 `iam_user_role`；靠表结构与状态常量约定一致
+
+| `GrantService`、`FunctionPermissionService`、`DecisionService` 引用 `RoleService.ROLE_ACTIVE`、`GrantService.GRANT_ACTIVE` | 数据耦合（常量） | 状态码集中定义在一处，避免各自写死字符串
+|===
+
+结论：Service 之间的调用都是数据耦合，没有控制耦合（不传 `isXxx` 这类控制标志）。主要问题是实体直出带来的标记耦合，以及多个 Service 共用同一张表带来的公共耦合，见第 8 章。
+
+== 6 RBAC0 模块详细设计
+
+本章各模块的 HTTP 接口形式见《API 设计说明书》，表结构见《数据库设计说明书》第 3 章。
+
+=== 6.1 M01 统一认证（AuthService / AuthInterceptor）
+
+*职责*：账号密码登录、签发与记录令牌、令牌认证、登出与吊销；拦截每个请求完成认证与鉴权。
+
+*对外接口*
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `login(LoginRequest)` | 账号、密码、［客户端 IP］ | `LoginResponse`（令牌、类型、有效期、用户 ID、姓名、账号状态） | FR-31、FR-32
+
+| `logout(accessToken)` | 令牌 | 无 | FR-32
+
+| `authenticate(token)` | 令牌 | 用户 ID | FR-32、FR-34
+
+| `validateToken(token)` | 令牌 | 是否有效 | FR-32
+
+| `revokeUserTokens(userId)` | 用户 ID | 无 | FR-05、FR-34
+|===
+
+*处理流程：login*
+
+. 校验账号、密码非空，否则 `PARAM_MISSING`。
+. 按账号查 D1，过滤已删除账号，用 PBKDF2 核对密码；账号不存在与密码错误返回同一错误 `UNAUTHENTICATED`"账号或密码错误"，防止账号枚举。
+. 校验账号状态：`SEALED` → `ACCOUNT_SEALED`；非 `NORMAL` → `ACCOUNT_DISABLED`。
+. 签发 JWT（HS384，2 小时），载荷为令牌 ID、用户 ID、账号、签发方、签发与过期时间。
+. 把令牌*哈希*写入 D5（不存明文），记录客户端 IP；更新最近登录时间。
+. 返回令牌与解密后的姓名。
+
+*处理流程：authenticate*
+
+. 校验签名、签发方、有效期：过期 → `TOKEN_EXPIRED`；格式或签名错误 → `TOKEN_INVALID`。
+. 按令牌哈希查 D5：查不到 → `TOKEN_INVALID`；已吊销 → `TOKEN_REVOKED`。
+. 返回用户 ID。
+
+*处理流程：AuthInterceptor.preHandle*（除 `POST /auth/login` 外的每个请求）
+
+. 取 `Authorization: Bearer <令牌>`，缺失 → `UNAUTHENTICATED`。
+. 调用 `authenticate` 得到用户 ID，存入请求属性。
+. 取 Spring MVC 匹配到的映射模板（如 `/users/{userId}`）与 HTTP 方法，调用 `findByApi` 查功能点。
+. 若该 API 已登记为功能点，调用 `hasPermission(userId, "ADMIN", 功能点ID)`，无权 → `NO_FUNCTION_PERM`（403）；未登记的 API 只要求登录。
+
+*数据访问*：读 D1（`iam_user`）；读写 D5（`iam_token`）。
+
+=== 6.2 M02 用户与账号管理（AccountService）
+
+*职责*：建立账号、查询账号、变更账号状态与离职封存、把实体转为安全视图。
+
+*对外接口*
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `createUser(userNo, password, realName, phone, orgId, post)` | 账号、［密码］、姓名、［电话］、组织、［岗位］ | 账号实体 | FR-01、FR-03、FR-48
+
+| `listUsers(pageable, orgId, accountStatus)` | 分页、［组织］、［状态］ | 账号分页 | FR-07
+
+| `getUser(userId)` | 用户 ID | 账号实体 | FR-07
+
+| `changeStatus(userId, targetStatus, reason)` | 用户 ID、目标状态、［原因］ | 账号实体 | FR-02、FR-05
+
+| `toView(user)` | 账号实体 | `UserView`（姓名解密、电话脱敏） | FR-49
+|===
+
+*处理流程：createUser*
+
+. 按账号查重，已存在 → `RESOURCE_DUPLICATE`。
+. 未给密码时使用初始密码（配置项 `iam.default-password`）；密码做 PBKDF2 加盐哈希。
+. 姓名、电话用 AES-256-GCM 加密，另存检索哈希；电话为空时不加密。
+. 状态置 `NORMAL`、软删除标记置 0，写入 D1。
+
+*处理流程：changeStatus*
+
+. 校验目标状态是 `NORMAL / DISABLED / SEALED / LOCKED` 之一，否则参数错误（400）。
+. 查账号，不存在 → `RESOURCE_NOT_FOUND`；已封存 → `USER_ALREADY_SEALED`（封存不可逆）。
+. 更新状态与修改时间。
+. 目标状态不是 `NORMAL`：调用 M01 吊销该用户全部令牌（下一次请求即 401）。
+. 目标状态是 `SEALED`：记录离职时间，调用 M07 回收全部有效角色。账号本身不删除。
+
+*数据访问*：读写 D1；经 M01 写 D5；经 M07 写 D3（`iam_user_role`）。
+
+=== 6.3 M04 角色管理（RoleService）
+
+*职责*：角色定义与查询。角色继承（`parent_id`）在 RBAC1 阶段实现，角色互斥在 RBAC3 阶段实现，对应方法目前为待实现。
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `createRole(roleCode, roleName, roleType, description)` | 编码、名称、类型（FUNC/DATA）、［描述］ | 角色实体 | FR-12
+
+| `getRole(roleId)` | 角色 ID | 角色实体 | FR-12
+
+| `listRoles()` | 无 | 未删除的角色列表 | FR-12
+|===
+
+*处理流程：createRole*：校验角色类型合法（否则 400）→ 编码查重（`RESOURCE_DUPLICATE`）→ 状态置 `ACTIVE` 写入 D3（`iam_role`）。
+
+=== 6.4 M05 功能权限管理（FunctionPermissionService）
+
+*职责*：登记系统、模块、功能点（含 API 映射）；角色与功能点的绑定、解绑与查询；按 API 查找功能点供拦截器使用。
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `registerSystem(systemCode, systemName, description)` | 系统编码、名称 | 系统实体 | FR-35、NFR-13
+
+| `registerModule(systemId, moduleCode, moduleName, sortNo)` | 系统 ID、模块编码、名称、［排序］ | 模块实体 | FR-17
+
+| `registerFunctionPoint(moduleId, pointCode, pointName, action, apiPath, apiMethod)` | 模块 ID、编码、名称、操作取值、［API 模板、方法］ | 功能点实体 | FR-17～FR-19
+
+| `bindRoleFunctions(roleId, functionPointIds, allowedAction, createdBy)` | 角色 ID、功能点 ID 列表、授予的操作 | 无 | FR-27
+
+| `unbindRoleFunctions(roleId, functionPointIds)` | 角色 ID、功能点 ID 列表 | 无 | FR-28
+
+| `getRoleFunctions(roleId)` | 角色 ID | 绑定列表 | FR-07
+
+| `findByApi(apiPath, apiMethod)` | API 模板、HTTP 方法 | 功能点（可能为空） | FR-19、FR-37
+
+| `listSystems()` | 无 | 系统列表 | FR-35
+|===
+
+*处理流程：registerFunctionPoint*：校验模块存在（`RESOURCE_NOT_FOUND`）→ 校验操作取值为 12 种之一（400）→ HTTP 方法转大写，API 模板 + 方法已登记 → `RESOURCE_DUPLICATE` → 写入 D3。`apiPath` 必须写 Controller 的映射模板（如 `/users/{userId}`），拦截器按模板精确匹配。
+
+*处理流程：bindRoleFunctions*：校验角色存在且为 `ACTIVE` → 校验操作取值 → 读出该角色已绑定的功能点 → 逐个校验功能点存在，已绑定的跳过（不报错，保证重复提交幂等）→ 写入 D3（`iam_role_function`）。
+
+=== 6.5 M07 授权管理（GrantService）
+
+*职责*：用户-角色的授予、撤销、全部回收与查询。这是 RBAC0"用户—角色"关系的唯一写入口。
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `grantRole(userId, roleId, expireTime, grantBy, grantReason)` | 用户 ID、角色 ID、［失效时间、授权人、原因］ | 绑定实体 | FR-27
+
+| `grantRoles(userId, roleIds, ...)` | 用户 ID、角色 ID 列表 | 无（一个事务，任一失败整体回滚） | FR-20
+
+| `revokeRole(userId, roleId)` | 用户 ID、角色 ID | 无 | FR-28
+
+| `revokeAllRoles(userId)` | 用户 ID | 无 | FR-05
+
+| `getUserRoles(userId)` | 用户 ID | 该用户全部绑定（含已回收） | FR-07
+|===
+
+*处理流程：grantRole*
+
+. 用户存在且未删除（`RESOURCE_NOT_FOUND`），状态为 `NORMAL`（否则 `ACCOUNT_DISABLED`）。
+. 角色存在且未删除（`RESOURCE_NOT_FOUND`），状态为 `ACTIVE`（否则 `PARAM_INVALID`）。
+. 失效时间不为空时必须晚于当前时间（`PARAM_INVALID`）。
+. 查该用户与该角色的绑定：已是 `ACTIVE` → `GRANT_DUPLICATE`；已回收 → 复用原记录；没有 → 新建。
+. 写入生效时间、失效时间、授权人、原因，状态置 `ACTIVE`。
+
+同一用户同一角色只保留一行，由唯一约束 `uk_user_role(user_id, role_id)` 保证；并发重复授予时数据库拒绝第二条。角色互斥校验（FR-14）在 RBAC3 阶段插入第 2、3 步之间。
+
+*处理流程：revokeRole*：查有效绑定，不存在 → `RESOURCE_NOT_FOUND`"用户未被授予该角色"→ 状态置 `REVOKED`（不删除记录）。
+
+=== 6.6 M08 鉴权决策（DecisionService）
+
+*职责*：计算用户在某系统下被授予的功能点集合，并据此做单点或批量判定。拦截器、开放接口、前端权限查询都调用本模块（FR-38）。
+
+[cols="2,2,2,1"]
+|===
+| 方法 | 输入 | 输出 | 需求
+
+| `getUserFunctionPoints(userId, systemCode)` | 用户 ID、系统编码 | 功能点 ID 集合 | FR-33、FR-39
+
+| `hasPermission(userId, systemCode, functionPointId)` | 用户 ID、系统编码、功能点 ID | 是否允许 | FR-37
+
+| `checkPermissions(userId, systemCode, functionPointIds)` | 用户 ID、系统编码、功能点 ID 列表 | 每个功能点是否允许（只计算一次集合） | FR-33
+|===
+
+*处理流程：getUserFunctionPoints*（RBAC0 判定规则）
+
+. 用户存在、未删除、状态为 `NORMAL`，否则返回空集合。
+. 取该用户状态为 `ACTIVE` 的用户-角色绑定，只保留在有效期内的（生效时间不晚于现在、失效时间为空或晚于现在）。
+. 过滤掉已删除或状态不是 `ACTIVE` 的角色；没有有效角色则返回空集合。
+. 取这些角色绑定的全部功能点 ID。
+. 按系统编码找到系统下的全部模块，只保留属于这些模块、未删除且状态为 `ACTIVE` 的功能点。
+
+判定语义：`允许 = 令牌有效 ∧ 账号正常 ∧ 功能点 ∈ 集合`。RBAC0 不校验 `allowed_action`（操作取值），也不做数据范围判定，二者在 RBAC3 阶段加入（见 7.2）。
+
+*数据访问*：只读 D1、D3（`iam_user`、`iam_user_role`、`iam_role`、`iam_role_function`、`iam_function_point`、`iam_module`、`iam_system`）。
+
+=== 6.7 M11 加密脱敏组件（CryptoComponent）
+
+[cols="2,3"]
+|===
+| 方法 | 说明
+
+| `encrypt / decrypt` | AES-256-GCM，随机 12 字节 IV，密文格式 `Base64(IV + 密文 + Tag)`
+
+| `hashPassword / verifyPassword` | PBKDF2-HMAC-SHA256，16 字节随机盐，65536 次迭代，格式 `Base64(盐):Base64(哈希)`；校验用常量时间比较
+
+| `hash` | 检索哈希：SHA-256(原文 + 密钥)，用于姓名、电话、令牌的等值匹配
+
+| `maskName / maskPhone` | 姓名保留首字（`张*`），电话保留前三后四（`138****5678`）
+|===
+
+密钥读取自 `application.yml` 的 `crypto.aes-key`，部署时必须用环境变量覆盖（FR-48 中"密钥独立管理"为扩展）。
+
+=== 6.8 公共：统一响应与异常处理
+
+* 所有接口返回 `Result{code, message, data, timestamp}`，成功时 `code = 0`；分页数据为 `PageResult{total, page, pageSize, list}`。
+* 业务规则违反统一抛出 `BusinessException(ErrorCode)`，由 `GlobalExceptionHandler` 转换为对应 HTTP 状态码与业务码（单一出口，Service 中不写 try-catch）。
+* 参数缺失、类型错误、枚举取值非法、请求体无法解析 → 400；未知路径 → 404；其他未预期异常 → 500 并记录错误日志。
+* 错误码表见《API 设计说明书》1.4 节。
+
+== 7 关键处理流程
+
+=== 7.1 一次管理端请求的处理顺序
+
+. 请求到达 `/api/v1/...`，`WebConfig` 注册的拦截器先执行（登录接口除外）。
+. `AuthInterceptor` 认证令牌 → 定位功能点 → 判定权限（6.1）。
+. 通过后进入 Controller，Controller 接收参数并调用 Service。
+. Service 按"校验 → 处理 → 落库"执行，写操作在 `@Transactional` 事务中完成。
+. Controller 用 `Result.success(...)` 包装返回；任一步抛出 `BusinessException` 则由全局异常处理器返回错误响应。
+
+=== 7.2 鉴权决策流程（PDP）
+
+----
+输入：令牌、系统编码、功能点（或 API 模板 + 方法）、［目标数据］
+  ├─① 令牌校验：签名有效？未过期？未吊销？      ──否──▶ 401（TOKEN_INVALID / EXPIRED / REVOKED）
+  ├─② 账号状态：状态 = NORMAL？                  ──否──▶ 功能点集合为空 → 403
+  ├─③ 功能权限：功能点 ∈ 用户经角色获得的集合？   ──否──▶ 403（NO_FUNCTION_PERM）
+  ├─③′ 操作取值：授予的操作覆盖本次请求所需操作？ （RBAC3 阶段）
+  ├─④ 数据范围：目标数据落在授权范围内？          （RBAC3 阶段，OUT_OF_DATA_SCOPE）
+  └─⑤ 全部通过 ──▶ 放行
+----
+
+RBAC0 实现第 ①②③ 步；③′ 与 ④ 在 RBAC3 阶段加入，届时判定语义扩展为 `令牌有效 ∧ 账号正常 ∧ 功能点允许 ∧ 操作覆盖 ∧ 数据在范围内`。RBAC1 阶段在第 ③ 步计算功能点集合时加入父角色的功能点（角色继承）。
+
+=== 7.3 权限变更即时生效
+
+* *RBAC0（已实现）*：鉴权不缓存，每次请求实时查询用户-角色与角色-功能点，授予、撤销、绑定、解绑后下一次请求立即生效；停用、封存时同步吊销令牌，用户下一次请求即 401。前端每 60 秒轮询一次权限集合刷新菜单。
+* *RBAC3（目标）*：在 `getUserFunctionPoints` 外加 Redis 权限快照缓存（键含权限版本号），授权变更时递增版本号使旧缓存失效，兼顾性能（NFR-07）与即时生效（FR-40）。
+* *扩展*：通知服务通过 WebSocket 推送"权限已变更"，并回调业务系统（FR-43）。
+
+=== 7.4 并发与一致性
+
+* *RBAC0（已实现）*：写操作在单个数据库事务中完成；唯一约束 `uk_user_role`、`uk_role_fp`、`uk_fp_api` 等在并发重复提交时由数据库拒绝第二条；`grantRoles` 批量授予任一失败整体回滚。
+* *RBAC3（目标）*：授权、回收、封存以用户或角色为粒度加 Redis 分布式锁，锁内校验角色互斥（FR-14、FR-41）；每次变更写入变更前后快照（FR-42）。
+
+== 8 设计评价与存在的问题
+
+=== 8.1 为什么第一次检查采用面向功能的设计
+
+* RBAC0 的业务以"增删改查 + 一条判定规则"为主，按功能分解直观，DFD 中的加工与 Service 方法一一对应，便于从需求追踪到代码。
+* 每个处理过程是线性步骤，便于逐步写单元测试（64 个测试，Jacoco 行覆盖率 80.9%）。
+* 课程安排第二、三次检查再用面向对象方式实现同样的功能，先有面向功能版本，才能对比两种方法的差异。
+
+=== 8.2 存在的问题
+
+. *同一业务规则散落多处*："账号为正常状态"在 `AuthService.validateAccountStatus`、`GrantService.grantRole`、`DecisionService` 第 ① 步各写一次；规则一变（例如增加"冻结"状态），要同时改三个地方——这正是课件所说的"变更放大"。
+. *数据与处理分离*：实体类只有字段，"角色是否有效""绑定是否在有效期内"这类判断写在各个 Service 里，没有统一的归属。
+. *鉴权一次查 5～6 次库*：`DecisionService` 依赖 7 个 Repository，每次判定实时查询；并发高时会成为瓶颈（NFR-07），需要 RBAC3 阶段的缓存。
+. *未登记的 API 只校验登录*：拦截器对没有登记为功能点的接口放行（fail-open），依赖管理员把管理端接口全部登记；`seed.sql` 已登记全部已实现的管理端接口。
+. *操作取值未参与判定*：`allowed_action` 只存储不判定，按钮级"查看/编辑"差异目前无法控制。
+. *实体直出*：角色、授权、系统等接口直接返回 JPA 实体，形成与前端的标记耦合。
+. *审计日志未实现*：FR-44 要求的操作留痕尚无落地。
+
+=== 8.3 与面向对象版本的对照（RBAC1 阶段）
+
+第二次检查将用面向对象方式重写同样的功能，预期改进：
+
+* 把规则放到拥有数据的对象上（GRASP 信息专家）：`User.isActive()`、`User.assignRole(role)`、`Role.permissions()`、`UserRole.isEffective(now)`，"账号正常"只写一次；
+* 角色继承用对象关系表达：`Role.allPermissions()` 递归合并父角色权限，判定代码不需要知道继承细节；
+* 面向功能版保留，用于对比：同一需求变化（如增加角色继承）在两个版本中各需要改动多少处。
+
+=== 8.4 V1.0 遗留问题的处理
+
+[cols="3,1,2"]
+|===
+| V1.0 第 9.5 节指出的问题 | 状态 | 处理
+
+| 只有模块清单，没有结构图 | 已解决 | 5.3 节模块结构图
+
+| DFD 中 D7 语义含糊、决策缓存未登记、P4 黑洞/奇迹混合、P1↔P3 经 D5 的读写未画 | 已解决 | 第 4 章重画并逐条检查
+
+| M08 与 M10 共享 Redis 的公共耦合 | RBAC3 阶段 | 启用缓存时统一经 `PermissionCacheComponent` 访问
+
+| 数据权限"本人/本项目"判定规则散落 | RBAC3 阶段 | 收敛为 M06 内单一判定函数
+
+| 第 19 套系统适配层、HR 事件契约 | 扩展 | 课程范围外
+|===
+
+== 附录 A RBAC0 需求追踪
+
+[cols="1,1,2,2,2"]
+|===
+| 需求 | 模块 | 实现 | 接口 | 数据表
+
+| FR-01 账号建立 | M02 | `AccountService.createUser` | `POST /users` | `iam_user`
+
+| FR-02 状态管理 | M02 | `AccountService.changeStatus` | `PUT /users/{userId}/status` | `iam_user`
+
+| FR-05 离职封存 | M02、M01、M07 | `changeStatus` → `revokeUserTokens`、`revokeAllRoles` | `PUT /users/{userId}/status` | `iam_user`、`iam_token`、`iam_user_role`
+
+| FR-12 角色定义 | M04 | `RoleService.createRole / getRole / listRoles` | `POST /roles`、`GET /roles`、`GET /roles/{roleId}` | `iam_role`
+
+| FR-17～FR-19 功能点与 API 映射 | M05 | `registerSystem / registerModule / registerFunctionPoint` | `POST /systems`、`/systems/modules`、`/systems/function-points` | `iam_system`、`iam_module`、`iam_function_point`
+
+| FR-27 授权 | M05、M07 | `bindRoleFunctions`、`grantRole` | `POST /systems/role-functions`、`POST /roles/grants` | `iam_role_function`、`iam_user_role`
+
+| FR-28 回收 | M05、M07 | `unbindRoleFunctions`、`revokeRole` | `DELETE /systems/role-functions`、`DELETE /roles/grants` | 同上
+
+| FR-31、FR-32 登录与令牌 | M01 | `AuthService.login / logout / validateToken` | `POST /auth/login`、`POST /auth/logout`、`GET /auth/validate` | `iam_user`、`iam_token`
+
+| FR-33、FR-39 鉴权与权限查询 | M08 | `DecisionService` | `GET /open/authorize`、`POST /open/authorize/batch`、`GET /open/permissions` | 只读
+
+| FR-37 后端 API 鉴权 | M01、M08 | `AuthInterceptor` | 全部接口（登录除外） | `iam_token`、`iam_function_point` 等
+
+| FR-48、FR-49 加密与脱敏 | M11、M02 | `CryptoComponent`、`AccountService.toView` | 用户相关接口 | `iam_user`
+|===
+
+== 附录 B 图源
+
+数据流图与模块结构图由 `design/diagram-src/` 下的脚本生成，修改后在该目录执行：
+
+[source,bash]
+----
+python3 dfd1.py ../dfd_1级.svg && ./render.sh ../dfd_1级.svg ../数据流图_1级图.png
+----
+
+其余图分别对应 `dfd0.py`、`dfd2_p2.py`、`dfd2_p3.py`、`structure.py`。`render.sh` 用本机 Chrome 按 2 倍分辨率导出 PNG。
+
+文档结束。

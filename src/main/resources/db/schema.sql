@@ -10,21 +10,25 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 1. 组织机构表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_org (
-    id           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
-    org_code     VARCHAR(64)  NOT NULL COMMENT '组织编码',
-    org_name     VARCHAR(128) NOT NULL COMMENT '组织名称',
-    org_type     VARCHAR(32)  NOT NULL COMMENT '组织类型：COMPANY/Branch/DEPARTMENT/PROJECT',
-    org_level    INT          NOT NULL COMMENT '层级（1=总公司 2=分公司 3=部门 4=项目部）',
-    parent_id    BIGINT       NULL     COMMENT '上级组织ID',
-    ancestors    VARCHAR(512) NULL     COMMENT '祖先路径，逗号分隔',
-    sort_no      INT          DEFAULT 0 COMMENT '排序号',
-    status       VARCHAR(16)  DEFAULT 'ACTIVE' COMMENT '状态',
-    is_deleted   TINYINT      DEFAULT 0 COMMENT '软删除',
-    created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    parent_id      BIGINT        NULL     COMMENT '上级组织；根节点为 NULL',
+    ancestors      VARCHAR(500)  NOT NULL DEFAULT '0' COMMENT '祖先路径，逗号分隔 ID，如 0,1,12，便于子树查询',
+    org_code       VARCHAR(64)   NOT NULL COMMENT '组织编码',
+    org_name       VARCHAR(128)  NOT NULL COMMENT '组织名称',
+    org_type       VARCHAR(16)   NOT NULL COMMENT '类型：HQ 总公司 / BRANCH 分公司 / DEPT 部门 / PROJECT 项目部',
+    org_level      TINYINT       NOT NULL COMMENT '层级：1 总公司 / 2 分公司 / 3 部门 / 4 项目部',
+    leader_user_id BIGINT        NULL     COMMENT '负责人',
+    sort_no        INT           NOT NULL DEFAULT 0 COMMENT '同级排序',
+    status         VARCHAR(16)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE 正常 / DISABLED 停用',
+    is_deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '软删除标记',
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    created_by     BIGINT        NULL     COMMENT '创建人',
+    updated_by     BIGINT        NULL     COMMENT '更新人',
     PRIMARY KEY (id),
     UNIQUE KEY uk_org_code (org_code),
-    KEY idx_parent (parent_id)
+    KEY idx_org_parent (parent_id),
+    KEY idx_org_ancestors (ancestors)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构';
 
 -- ----------------------------------------------------------
@@ -79,15 +83,15 @@ CREATE TABLE IF NOT EXISTS iam_role (
 -- 4. 角色互斥表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_role_exclusion (
-    id              BIGINT       NOT NULL AUTO_INCREMENT,
-    role_id         BIGINT       NOT NULL COMMENT '角色ID',
-    excluded_role_id BIGINT      NOT NULL COMMENT '互斥角色ID',
-    description     VARCHAR(256) NULL,
-    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    role_id          BIGINT        NOT NULL COMMENT '角色 A',
+    excluded_role_id BIGINT        NOT NULL COMMENT '互斥角色 B',
+    description      VARCHAR(255)  NULL     COMMENT '互斥原因（如会计与出纳）',
+    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    created_by       BIGINT        NULL     COMMENT '创建人',
     PRIMARY KEY (id),
-    KEY idx_role (role_id),
-    KEY idx_excluded (excluded_role_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色互斥';
+    UNIQUE KEY uk_role_excl (role_id, excluded_role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色互斥（双向落库）';
 
 -- ----------------------------------------------------------
 -- 5. 用户-角色关联表
@@ -182,34 +186,33 @@ CREATE TABLE IF NOT EXISTS iam_role_function (
 -- 10. 数据范围表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_data_scope (
-    id            BIGINT       NOT NULL AUTO_INCREMENT,
-    scope_code    VARCHAR(64)  NOT NULL,
-    scope_name    VARCHAR(128) NOT NULL,
-    scope_type    VARCHAR(32)  NOT NULL COMMENT 'ALL/BRANCH/DEPT/PROJECT/CUSTOM',
-    custom_org_ids VARCHAR(512) NULL     COMMENT '自定义组织ID列表，逗号分隔',
-    description   VARCHAR(256) NULL,
-    is_deleted    TINYINT      DEFAULT 0,
-    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    scope_code  VARCHAR(32)   NOT NULL COMMENT '编码：ALL / BRANCH / DEPT / PROJECT / SELF',
+    scope_name  VARCHAR(64)   NOT NULL COMMENT '名称：全公司/本分公司/本部门/本项目/本人',
+    description VARCHAR(255)  NULL     COMMENT '说明',
+    sort_no     INT           NOT NULL DEFAULT 0 COMMENT '排序',
+    status      VARCHAR(16)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE / DISABLED',
+    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_scope_code (scope_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据范围';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据范围字典';
 
 -- ----------------------------------------------------------
 -- 11. 角色-数据范围关联表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_role_data_scope (
-    id         BIGINT   NOT NULL AUTO_INCREMENT,
-    role_id    BIGINT   NOT NULL,
-    scope_id   BIGINT   NOT NULL,
-    granted_by VARCHAR(64) NULL,
-    granted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    is_deleted TINYINT  DEFAULT 0,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    role_id        BIGINT        NOT NULL COMMENT '角色',
+    scope_type     VARCHAR(32)   NOT NULL COMMENT '数据范围类型',
+    org_id         BIGINT        NULL     COMMENT '绑定组织（本分公司/本部门时使用）',
+    project_id     BIGINT        NULL     COMMENT '绑定项目（本项目时使用，指向 org_type=PROJECT 节点）',
+    effective_time DATETIME      NULL     COMMENT '生效时间（临时授权）',
+    expire_time    DATETIME      NULL     COMMENT '失效时间',
+    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    created_by     BIGINT        NULL     COMMENT '授权人',
     PRIMARY KEY (id),
-    KEY idx_role (role_id),
-    KEY idx_scope (scope_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-数据范围关联';
+    UNIQUE KEY uk_role_scope (role_id, scope_type, org_id, project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-数据范围授权';
 
 -- ----------------------------------------------------------
 -- 12. 令牌表
@@ -235,41 +238,38 @@ CREATE TABLE IF NOT EXISTS iam_token (
 -- 13. 审计日志表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_audit_log (
-    id            BIGINT       NOT NULL AUTO_INCREMENT,
-    user_id       BIGINT       NULL,
-    user_no       VARCHAR(64)  NULL,
-    system_code   VARCHAR(64)  NULL,
-    action        VARCHAR(32)  NOT NULL COMMENT '操作类型',
-    resource_type VARCHAR(64)  NULL,
-    resource_id   VARCHAR(64)  NULL,
-    detail        TEXT         NULL,
-    client_ip     VARCHAR(64)  NULL,
-    success       TINYINT      DEFAULT 1,
-    error_msg     VARCHAR(512) NULL,
-    operated_at   DATETIME     NOT NULL,
-    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_user (user_id),
-    KEY idx_action (action),
-    KEY idx_operated (operated_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志';
+    log_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键，自增',
+    user_id      BIGINT        NULL     COMMENT '操作人 ID（系统事件可空）',
+    username     VARCHAR(128)  NULL     COMMENT '操作人用户名快照（脱敏后）',
+    action       VARCHAR(128)  NOT NULL COMMENT '操作内容/动作',
+    operate_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    success      TINYINT       NOT NULL COMMENT '操作成功与否（1 成功 / 0 失败）',
+    target       VARCHAR(255)  NULL     COMMENT '操作对象（如角色 ID、功能点 ID）',
+    ip           VARCHAR(64)   NULL     COMMENT '来源 IP',
+    system_code  VARCHAR(64)   NULL     COMMENT '所属系统',
+    detail       JSON          NULL     COMMENT '扩展详情（请求参数摘要、拒绝原因等）',
+    decision_id  VARCHAR(64)   NULL     COMMENT '鉴权决策 ID，关联决策链路',
+    PRIMARY KEY (log_id),
+    KEY idx_log_time (operate_time),
+    KEY idx_log_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志（只追加、永久保存）';
 
 -- ----------------------------------------------------------
 -- 14. 权限变更日志表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_permission_change_log (
-    id            BIGINT       NOT NULL AUTO_INCREMENT,
-    change_type   VARCHAR(32)  NOT NULL COMMENT 'GRANT/REVOKE/MODIFY',
-    target_type   VARCHAR(32)  NOT NULL COMMENT 'USER_ROLE/ROLE_FUNC/ROLE_SCOPE',
-    target_id     VARCHAR(64)  NULL,
-    before_value  TEXT         NULL,
-    after_value   TEXT         NULL,
-    operator_id   BIGINT       NULL,
-    operator_no   VARCHAR(64)  NULL,
-    reason        VARCHAR(256) NULL,
-    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    KEY idx_target (target_type, target_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限变更日志';
+    change_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    user_id         BIGINT        NULL     COMMENT '受影响用户（角色级变更可空）',
+    role_id         BIGINT        NULL     COMMENT '受影响角色（用户级变更可空）',
+    change_type     VARCHAR(32)   NOT NULL COMMENT '类型：GRANT / REVOKE / SEAL / ROLE_UPDATE / SCOPE_UPDATE',
+    before_snapshot JSON          NULL     COMMENT '变更前快照',
+    after_snapshot  JSON          NULL     COMMENT '变更后快照',
+    operator        BIGINT        NULL     COMMENT '操作人',
+    changed_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
+    remark          VARCHAR(500)  NULL     COMMENT '备注',
+    PRIMARY KEY (change_id),
+    KEY idx_pcl_user (user_id),
+    KEY idx_pcl_time (changed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限变更快照（只追加）';
 
 SET FOREIGN_KEY_CHECKS = 1;

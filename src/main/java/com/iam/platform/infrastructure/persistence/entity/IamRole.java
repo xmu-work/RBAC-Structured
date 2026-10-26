@@ -40,7 +40,7 @@ public class IamRole {
     @Column(name = "description", length = 500)
     private String description;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "tinyint")
     private Integer isDeleted;
 
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -42,7 +42,7 @@ public class IamFunctionPoint {
     @Column(name = "status", nullable = false, length = 16)
     private String status;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "tinyint")
     private Integer isDeleted;
 
     @Column(name = "created_at", nullable = false, updatable = false)

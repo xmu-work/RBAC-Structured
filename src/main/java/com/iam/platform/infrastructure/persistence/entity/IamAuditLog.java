@@ -32,7 +32,7 @@ public class IamAuditLog {
     @Column(name = "operate_time", nullable = false)
     private LocalDateTime operateTime;
 
-    @Column(name = "success", nullable = false)
+    @Column(name = "success", nullable = false, columnDefinition = "tinyint")
     private Integer success;
 
     @Column(name = "target", length = 255)

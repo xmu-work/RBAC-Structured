@@ -36,7 +36,7 @@ public class IamOrg {
     @Column(name = "org_type", nullable = false, length = 16)
     private String orgType;
 
-    @Column(name = "org_level", nullable = false)
+    @Column(name = "org_level", nullable = false, columnDefinition = "tinyint")
     private Integer orgLevel;
 
     @Column(name = "leader_user_id")
@@ -48,7 +48,7 @@ public class IamOrg {
     @Column(name = "status", nullable = false, length = 16)
     private String status;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "tinyint")
     private Integer isDeleted;
 
     @Column(name = "created_at", nullable = false, updatable = false)

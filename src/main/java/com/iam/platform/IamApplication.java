@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 /**
  * 统一应用软件权限管理系统启动类。
  *
- * <p>对应结构化设计总体架构：接入层 → 应用服务层 → 领域服务层 → 数据层。
+ * <p>对应详细设计说明书 3.1 分层结构：接口层 → 应用服务层 → 基础设施层。
  * 采用结构化编程思想：自顶向下分层、单一职责、高内聚低耦合。
  */
 @SpringBootApplication

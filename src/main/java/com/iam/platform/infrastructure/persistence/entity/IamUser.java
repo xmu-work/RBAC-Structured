@@ -60,7 +60,7 @@ public class IamUser {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
-    @Column(name = "is_deleted", nullable = false)
+    @Column(name = "is_deleted", nullable = false, columnDefinition = "tinyint")
     private Integer isDeleted;
 
     @Column(name = "created_at", nullable = false, updatable = false)
