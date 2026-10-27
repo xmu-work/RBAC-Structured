@@ -1,0 +1,142 @@
+# RBAC-Structured 后端栈（当前 4 台阶段用）
+# 只部署 mysql / redis / app，先把后端跑起来；前端 web 镜像就绪后改用 iam-stack.yml（含前端）。
+# 用法：在 manage 上，cd deploy/swarm && docker stack deploy -c iam-stack-backend.yml --with-registry-auth iam
+# 镜像地址：SWR 组织名 ooad-mytx，region cn-north-4。
+
+version: "3.8"
+
+networks:
+  iam-net:
+    external: true
+
+secrets:
+  jwt_secret:           { external: true }
+  crypto_aes_key:       { external: true }
+  db_app_password:      { external: true }
+  mysql_root_password:  { external: true }
+  redis_password:       { external: true }
+  iam_default_password: { external: true }
+
+services:
+
+  mysql:
+    image: swr.cn-north-4.myhuaweicloud.com/ooad-mytx/mysql:8.0
+    networks:
+      iam-net:
+        aliases: [mysql]
+    environment:
+      MYSQL_DATABASE: iam_platform
+      MYSQL_USER: iam_app
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/db_app_password
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=384M
+      - --max-connections=120
+      - --skip-name-resolve
+      - --default-time-zone=+08:00
+    secrets:
+      - mysql_root_password
+      - db_app_password
+    volumes:
+      # 数据落在 course-node1 本地磁盘；配合 placement 约束钉死，换节点 = 丢数据
+      - /srv/iam/mysql:/var/lib/mysql
+    stop_grace_period: 1m
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == db]
+      resources:
+        limits: { memory: 900M }
+        reservations: { memory: 256M }
+      restart_policy: { condition: on-failure, delay: 15s }
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p\"$$(cat /run/secrets/mysql_root_password)\" --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ooad-mytx/redis:7-alpine
+    networks:
+      iam-net:
+        aliases: [redis]
+    command: ["/bin/sh", "-c",
+      "exec redis-server --requirepass \"$$(cat /run/secrets/redis_password)\" --maxmemory 128mb --maxmemory-policy noeviction --appendonly yes"]
+    secrets:
+      - redis_password
+    volumes:
+      - /srv/iam/redis:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == db]
+      resources:
+        limits: { memory: 256M }
+      restart_policy: { condition: on-failure, delay: 15s }
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: swr.cn-north-4.myhuaweicloud.com/ooad-mytx/iam-app:1.0.0
+    networks:
+      iam-net:
+        aliases: [app]
+    environment:
+      SERVER_PORT: "8080"
+      MANAGEMENT_SERVER_PORT: "8081"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "never"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/iam_platform?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: iam_app
+      SPRING_DATASOURCE_DRUID_INITIAL_SIZE: "2"
+      SPRING_DATASOURCE_DRUID_MIN_IDLE: "2"
+      SPRING_DATASOURCE_DRUID_MAX_ACTIVE: "8"
+      SPRING_DATASOURCE_DRUID_STAT_VIEW_SERVLET_ENABLED: "false"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_TIMEOUT: "3000ms"
+      TZ: Asia/Shanghai
+    secrets:
+      - jwt_secret
+      - crypto_aes_key
+      - db_app_password
+      - redis_password
+      - iam_default_password
+    stop_grace_period: 30s
+    deploy:
+      # 当前只有 1 台 app 节点（course-node2），2G 内存只放得下 1 个 JVM；
+      # 扩容到 8 台、有 3 台 role=app 节点后改成 3
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 1280M }
+        reservations: { memory: 512M }
+      restart_policy: { condition: on-failure, delay: 15s }
+      # 2G 节点容不下两个 JVM：更新时先停旧副本再起新副本
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: pause
+    healthcheck:
+      # 基础镜像是 alpine（busybox），用 wget 而不是 curl
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/actuator/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    # 前端没部署之前，如需从本机 Postman/浏览器直测后端 API，
+    # 取消下面注释把 8080 发布到 course-node2（记得防火墙只对自己的 IP 放行）：
+    # ports:
+    #   - target: 8080
+    #     published: 8080
+    #     protocol: tcp
+    #     mode: host
