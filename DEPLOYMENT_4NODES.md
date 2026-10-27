@@ -38,28 +38,36 @@ docker network create --driver overlay iam-net
 sudo mkdir -p /srv/iam/mysql /srv/iam/redis
 ```
 
-## 3. 把代码传到 compiler
+## 3. 代码获取与更新（git 方式）
 
-项目目前只在你的 Windows 上，没有 git 远程仓库，直接打包传：
+服务器统一从 GitHub 拉代码，不再用 tar 打包。仓库：`https://github.com/xmu-work/RBAC-Structured.git`（main 分支，公开仓库，服务器拉取无需凭据）。
+
+**首次获取**（compiler 和 manage 各执行一次；node1/node2 只跑镜像，不需要代码）：
 
 ```bash
-# Windows Git Bash（本机）执行
-cd /d/Downloads/Courses
-tar --exclude=RBAC-Structured/target \
-    --exclude=RBAC-Structured/web/node_modules \
-    --exclude=RBAC-Structured/web/dist \
-    --exclude=RBAC-Structured/design \
-    -czf /tmp/rbac-src.tar.gz RBAC-Structured
-scp /tmp/rbac-src.tar.gz root@<compiler的IP>:~/
+cd ~
+git clone --depth 1 https://github.com/xmu-work/RBAC-Structured.git
+cd RBAC-Structured
 ```
 
+**以后更新并重新发布**（compiler 上）：
+
 ```bash
-# compiler 上执行
-tar xzf ~/rbac-src.tar.gz -C ~/
 cd ~/RBAC-Structured
+git pull                                  # 拉取 main 最新代码
+
+export JAVA_HOME=$HOME/jdk-21.0.2
+$HOME/apache-maven-3.9.16/bin/mvn -B -DskipTests package
+cp target/iam-platform-1.0.0-SNAPSHOT.jar app.jar
+
+docker build -f deploy/swarm/Dockerfile.app-prebuilt -t swr.cn-north-4.myhuaweicloud.com/ooad-mytx/iam-app:1.0.1 .
+docker push swr.cn-north-4.myhuaweicloud.com/ooad-mytx/iam-app:1.0.1
+
+# 然后在 manage 上滚动更新：
+# docker service update --image swr.cn-north-4.myhuaweicloud.com/ooad-mytx/iam-app:1.0.1 iam_app
 ```
 
-服务器上已有的 `spring-fundamentals` 项目不用动，互不影响。
+分支约定：`main` 是团队共享分支（push 前先 `git pull` 合并别人的改动）；日常开发在个人分支（hao1417 / duduking19 / xiupengfeng）上做，走 PR 合入 main。服务器只跟 main。
 
 ## 4. 准备 SWR（华为云容器镜像服务）
 
