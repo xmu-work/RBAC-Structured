@@ -1,0 +1,20 @@
+# 预编译 JAR 版后端镜像（服务器到 Docker Hub 不通时的离线构建路径）
+# 前置：先在本仓库目录用 Maven 编译出 JAR 并复制为根目录 app.jar：
+#   export JAVA_HOME=$HOME/jdk-21.0.2
+#   $HOME/apache-maven-3.9.16/bin/mvn -DskipTests package
+#   cp target/iam-platform-1.0.0-SNAPSHOT.jar app.jar
+#   docker build -f deploy/swarm/Dockerfile.app-prebuilt -t <registry>/iam-app:1.0.0 .
+# 基础镜像 openjdk:21-alpine 来自课程预置镜像（已转推到 ooad-mytx 组织）。
+
+FROM swr.cn-north-4.myhuaweicloud.com/ooad-mytx/openjdk:21-alpine
+WORKDIR /app
+COPY deploy/swarm/entrypoint.sh /app/entrypoint.sh
+COPY app.jar /app/app.jar
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+ && chmod 0755 /app/entrypoint.sh \
+ && addgroup -S -g 10001 iam \
+ && adduser -S -u 10001 -G iam iam \
+ && chown -R iam:iam /app
+USER 10001
+EXPOSE 8080 8081
+ENTRYPOINT ["/app/entrypoint.sh"]

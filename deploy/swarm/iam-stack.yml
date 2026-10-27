@@ -1,0 +1,158 @@
+# RBAC-Structured Docker Swarm 部署栈（含前端，8 台目标形态）
+# 用法：在任一 manager 节点，cd deploy/swarm && docker stack deploy -c iam-stack.yml --with-registry-auth iam
+# 当前 4 台阶段请先用 iam-stack-backend.yml（只含 mysql/redis/app）。
+# 镜像地址里的 ORG 请替换为你在华为云 SWR 创建的组织名，region 按实际控制台地址调整。
+# 注意：app 的 replicas=3 要求有 3 台 role=app 节点，节点不够时先把 replicas 改小。
+
+version: "3.8"
+
+networks:
+  iam-net:
+    external: true
+
+secrets:
+  jwt_secret:           { external: true }
+  crypto_aes_key:       { external: true }
+  db_app_password:      { external: true }
+  mysql_root_password:  { external: true }
+  redis_password:       { external: true }
+  iam_default_password: { external: true }
+
+services:
+
+  mysql:
+    image: swr.cn-north-4.myhuaweicloud.com/ORG/mysql:8.0
+    networks:
+      iam-net:
+        aliases: [mysql]
+    environment:
+      MYSQL_DATABASE: iam_platform
+      MYSQL_USER: iam_app
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/db_app_password
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=384M
+      - --max-connections=120
+      - --skip-name-resolve
+      - --default-time-zone=+08:00
+    secrets:
+      - mysql_root_password
+      - db_app_password
+    volumes:
+      # 数据落在 swarm-04 本地磁盘；换节点 = 丢数据，所以必须配合 placement 约束
+      - /srv/iam/mysql:/var/lib/mysql
+    stop_grace_period: 1m
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == db]
+      resources:
+        limits: { memory: 900M }
+        reservations: { memory: 256M }
+      restart_policy: { condition: on-failure, delay: 15s }
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p\"$$(cat /run/secrets/mysql_root_password)\" --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ORG/redis:7-alpine
+    networks:
+      iam-net:
+        aliases: [redis]
+    command: ["/bin/sh", "-c",
+      "exec redis-server --requirepass \"$$(cat /run/secrets/redis_password)\" --maxmemory 128mb --maxmemory-policy noeviction --appendonly yes"]
+    secrets:
+      - redis_password
+    volumes:
+      - /srv/iam/redis:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == db]
+      resources:
+        limits: { memory: 256M }
+      restart_policy: { condition: on-failure, delay: 15s }
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: swr.cn-north-4.myhuaweicloud.com/ORG/iam-app:1.0.0
+    networks:
+      iam-net:
+        aliases: [app]
+    environment:
+      SERVER_PORT: "8080"
+      MANAGEMENT_SERVER_PORT: "8081"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "never"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/iam_platform?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: iam_app
+      SPRING_DATASOURCE_DRUID_INITIAL_SIZE: "2"
+      SPRING_DATASOURCE_DRUID_MIN_IDLE: "2"
+      SPRING_DATASOURCE_DRUID_MAX_ACTIVE: "8"
+      SPRING_DATASOURCE_DRUID_STAT_VIEW_SERVLET_ENABLED: "false"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_TIMEOUT: "3000ms"
+      TZ: Asia/Shanghai
+    secrets:
+      - jwt_secret
+      - crypto_aes_key
+      - db_app_password
+      - redis_password
+      - iam_default_password
+    stop_grace_period: 30s
+    deploy:
+      replicas: 3
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 1280M }
+        reservations: { memory: 512M }
+      restart_policy: { condition: on-failure, delay: 15s }
+      # 2G 节点只放得下一个 JVM，必须 stop-first：
+      # 先停旧副本再起新副本，避免更新瞬间一个节点跑两个 JVM 被 OOM 杀掉
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: pause
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  web:
+    image: swr.cn-north-4.myhuaweicloud.com/ORG/iam-web:1.0.0
+    networks:
+      iam-net:
+        aliases: [web]
+    ports:
+      # host 模式：80 只发布在 3 台 manager 上，保留真实客户端 IP
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: { memory: 128M }
+      restart_policy: { condition: any }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5

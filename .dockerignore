@@ -1,0 +1,7 @@
+# 构建镜像时排除无关内容（构建上下文 = 仓库根目录）
+target
+web/node_modules
+web/dist
+design
+*.md
+*.log
