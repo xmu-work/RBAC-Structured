@@ -20,7 +20,7 @@ import java.util.Set;
 /**
  * 角色管理应用服务（M04）。
  *
- * <p>角色定义（功能角色/岗位型数据角色）、继承、互斥、复制、停用、预置模板。
+ * <p>功能角色定义与互斥约束；数据权限不在本项目范围内。
  * 对应 FR-12～FR-16。
  */
 @Slf4j
@@ -61,7 +61,7 @@ public class RoleService {
      */
     public IamRole getRole(Long roleId) {
         return roleRepository.findById(roleId)
-                .filter(r -> r.getIsDeleted() == 0)
+                .filter(this::isFunctionRole)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + roleId));
     }
 
@@ -69,7 +69,7 @@ public class RoleService {
      * 查询全部角色。
      */
     public List<IamRole> listRoles() {
-        return roleRepository.findAll().stream().filter(r -> r.getIsDeleted() == 0).toList();
+        return roleRepository.findAll().stream().filter(this::isFunctionRole).toList();
     }
 
     /**
@@ -120,6 +120,10 @@ public class RoleService {
         LocalDateTime now = LocalDateTime.now();
         saveOneExclusion(roleIdA, roleIdB, reason, now);
         saveOneExclusion(roleIdB, roleIdA, reason, now);
+    }
+
+    private boolean isFunctionRole(IamRole role) {
+        return role.getIsDeleted() == 0 && RoleType.FUNC.getCode().equals(role.getRoleType());
     }
 
     private void saveOneExclusion(Long roleId, Long excludedRoleId, String reason, LocalDateTime now) {

@@ -15,8 +15,7 @@ public enum ChangeType {
     GRANT("GRANT", "授权"),
     REVOKE("REVOKE", "回收"),
     SEAL("SEAL", "封存"),
-    ROLE_UPDATE("ROLE_UPDATE", "角色变更"),
-    SCOPE_UPDATE("SCOPE_UPDATE", "数据范围变更");
+    ROLE_UPDATE("ROLE_UPDATE", "角色变更");
 
     private final String code;
     private final String description;

@@ -5,6 +5,7 @@ import com.iam.platform.application.decision.DecisionService;
 import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
 import com.iam.platform.common.enums.ErrorCode;
+import com.iam.platform.common.enums.RoleType;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 /**
  * 授权管理应用服务（M07）。
  *
- * <p>用户-角色绑定/解绑、角色-功能绑定、角色-数据范围绑定。
+ * <p>用户-角色绑定/解绑与角色-功能权限校验。
  * 授权前校验角色互斥、有效期、授权范围。
  * 对应 FR-17～FR-22、UC-04。
  */
@@ -53,7 +54,7 @@ public class GrantService {
      *
      * <p>流程：校验用户存在且正常 → 校验角色存在且有效 → 校验有效期 → 校验重复 → 落库。
      * 同一用户同一角色只保留一行记录，回收后再次授予时复用原记录。
-     * 角色互斥属于 RBAC2 约束，留待 RBAC3 阶段实现。
+     * 角色互斥在授予前校验。
      * 对应 UC-04 授予角色。
      */
     @Transactional
@@ -66,7 +67,7 @@ public class GrantService {
         }
 
         IamRole role = roleRepository.findById(roleId)
-                .filter(r -> r.getIsDeleted() == 0)
+                .filter(r -> r.getIsDeleted() == 0 && RoleType.FUNC.getCode().equals(r.getRoleType()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在: " + roleId));
         if (!RoleService.ROLE_ACTIVE.equals(role.getStatus())) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, "角色已停用: " + roleId);

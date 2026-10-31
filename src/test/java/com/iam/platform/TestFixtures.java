@@ -37,6 +37,7 @@ public final class TestFixtures {
         IamRole role = new IamRole();
         role.setId(id);
         role.setRoleCode("R" + id);
+        role.setRoleType("FUNC");
         role.setStatus(status);
         role.setIsDeleted(0);
         return role;

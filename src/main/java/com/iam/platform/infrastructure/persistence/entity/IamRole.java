@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 /**
  * 角色实体（iam_role）。
  *
- * <p>功能角色 / 岗位型数据角色。parent_id 表示角色继承（子角色继承父角色权限）。
+ * <p>本项目只使用功能角色。parent_id 表示角色继承（子角色继承父角色权限）。
  */
 @Data
 @Entity
@@ -26,7 +26,7 @@ public class IamRole {
     @Column(name = "role_name", nullable = false, length = 128)
     private String roleName;
 
-    /** FUNC=功能角色 / DATA=岗位型数据角色 */
+    /** 固定为 FUNC=功能角色 */
     @Column(name = "role_type", nullable = false, length = 16)
     private String roleType;
 

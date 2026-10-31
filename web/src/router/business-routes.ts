@@ -5,7 +5,7 @@ export const BUSINESS_LAYOUT_ROUTE_NAME = 'AppLayout'
 
 /**
  * 权限过滤后的业务路由表，同时是侧边菜单的唯一数据源（契约 6.2）。
- * 这里只登记框架入口，具体业务页面由各领域后续替换占位页。
+ * 这里登记已接入的业务页面，菜单直接按功能点过滤。
  */
 export const businessRouteChildren: RouteRecordRaw[] = [
   {
@@ -66,16 +66,6 @@ export const businessRouteChildren: RouteRecordRaw[] = [
       title: '功能权限',
       icon: 'Grid',
       functionPointId: ADMIN_FUNCTION_POINTS.FUNCTION_PERMISSION,
-    },
-  },
-  {
-    path: 'data-scope',
-    name: 'DataScopePage',
-    component: () => import('@/views/data-scope/DataScopePage.vue'),
-    meta: {
-      title: '数据权限',
-      icon: 'Coin',
-      functionPointId: ADMIN_FUNCTION_POINTS.DATA_SCOPE,
     },
   },
   {

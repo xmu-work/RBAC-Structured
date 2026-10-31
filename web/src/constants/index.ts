@@ -1,4 +1,4 @@
-/** 管理后台自身系统编码（契约 6.1：[待后端] 在 iam_system 登记 ADMIN 及其菜单/按钮功能点） */
+/** 管理后台自身系统编码（契约 6.1：ADMIN 及菜单/按钮功能点由 seed.sql 预置） */
 export const ADMIN_SYSTEM_CODE = 'ADMIN'
 
 /** 权限轮询间隔（契约 6.3：60s 定时轮询 + 主动失效双保险） */

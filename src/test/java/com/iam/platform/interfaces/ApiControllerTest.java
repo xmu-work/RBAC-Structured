@@ -6,13 +6,11 @@ import com.iam.platform.application.audit.AuditService;
 import com.iam.platform.application.auth.AuthService;
 import com.iam.platform.application.auth.LoginResponse;
 import com.iam.platform.application.decision.DecisionService;
-import com.iam.platform.application.decision.DecisionResult;
 import com.iam.platform.application.decision.PermissionCheckResult;
 import com.iam.platform.application.grant.GrantService;
 import com.iam.platform.application.idempotency.IdempotencyStore;
 import com.iam.platform.application.organization.OrganizationService;
 import com.iam.platform.application.openapi.OpenApiAuthenticator;
-import com.iam.platform.application.permission.DataPermissionService;
 import com.iam.platform.application.permission.FunctionPermissionService;
 import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.ErrorCode;
@@ -62,8 +60,6 @@ class ApiControllerTest {
     private GrantService grantService;
     @MockitoBean
     private FunctionPermissionService functionPermissionService;
-    @MockitoBean
-    private DataPermissionService dataPermissionService;
     @MockitoBean
     private DecisionService decisionService;
     @MockitoBean
@@ -430,23 +426,14 @@ class ApiControllerTest {
     }
 
     @Test
-    void openApiDataScopeEndpoint() throws Exception {
-        when(decisionService.resolveDataScopes(1L, "ADMIN")).thenReturn(List.of());
-
-        mvc.perform(get("/open/data-scope").header("Authorization", AUTH)
-                        .param("userId", "1").param("systemCode", "ADMIN"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void openApiResourceEndpoint() throws Exception {
-        when(decisionService.decide(eq(1L), eq("ADMIN"), eq(100L), any()))
-                .thenReturn(new DecisionResult(true, true, List.of()));
-
+    void dataPermissionEndpointsAreNotExposed() throws Exception {
+        mvc.perform(get("/systems/data-scopes").header("Authorization", AUTH))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/open/data-scope").header("Authorization", AUTH))
+                .andExpect(status().isNotFound());
         mvc.perform(post("/open/authorize/resource").header("Authorization", AUTH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":1,\"systemCode\":\"ADMIN\",\"functionPointId\":100}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.allowed").value(true));
+                .andExpect(status().isNotFound());
     }
 }

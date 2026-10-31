@@ -12,10 +12,7 @@ export interface Result<T = unknown> {
   timestamp?: string
 }
 
-/**
- * 分页响应（契约 4.4 / D4：只适配 PageResult 一种结构，camelCase）
- * [待后端] UserController/AuditController 当前返回 Spring Page，必须统一改为 PageResult
- */
+/** 分页响应（契约 4.4 / D4：只适配 PageResult 一种结构，camelCase） */
 export interface PageResult<T> {
   total: number
   page: number

@@ -71,7 +71,7 @@ async function submit(): Promise<void> {
         <span class="login-page__badge">RBAC · 统一身份与权限平台</span>
         <h1 class="login-page__title">一个入口，<br />统一管理所有权限</h1>
         <p class="login-page__subtitle">
-          面向组织、用户、角色、功能权限和数据范围的统一管理控制台。
+          面向组织、用户、角色与功能权限的统一管理控制台。
         </p>
         <ul class="login-page__features">
           <li>RBAC 权限模型与动态路由</li>

@@ -44,7 +44,7 @@ async function handleSealConfirm(reason: string): Promise<void> {
   sealSubmitting.value = true
   try {
     const updated = await changeUserStatus(userId, { targetStatus: 'SEALED', reason })
-    ElMessage.success(`用户「${updated.realName}」已封存，其角色与数据权限已解绑、令牌已吊销`)
+    ElMessage.success(`用户「${updated.realName}」已封存，其角色已解绑、令牌已吊销`)
     sealDialogVisible.value = false
     tableReloadSignal.value += 1
   } catch {

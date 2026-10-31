@@ -3,8 +3,7 @@ import { reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { createRole } from '@/api/role.api'
-import { useDict } from '@/composables/useDict'
-import { RoleType, type RoleTypeCode } from '@/constants/enums'
+import { RoleType } from '@/constants/enums'
 import { toFieldErrors } from '@/utils/formErrors'
 import type { Role } from '@/types/role.types'
 
@@ -13,8 +12,6 @@ const emit = defineEmits<{ success: [role: Role] }>()
 
 const visible = defineModel<boolean>({ default: false })
 
-const { roleTypeOptions } = useDict()
-
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const serverErrors = ref<Record<string, string>>({})
@@ -22,14 +19,12 @@ const serverErrors = ref<Record<string, string>>({})
 interface RoleCreateForm {
   roleCode: string
   roleName: string
-  roleType: RoleTypeCode
   description: string
 }
 
 const form = reactive<RoleCreateForm>({
   roleCode: '',
   roleName: '',
-  roleType: RoleType.FUNC,
   description: '',
 })
 
@@ -39,7 +34,6 @@ watch(visible, (open) => {
   }
   form.roleCode = ''
   form.roleName = ''
-  form.roleType = RoleType.FUNC
   form.description = ''
   serverErrors.value = {}
   formRef.value?.clearValidate()
@@ -64,7 +58,6 @@ const rules: FormRules = {
     { required: true, message: '请输入角色名称', trigger: 'blur' },
     { max: 50, message: '角色名称不超过 50 个字符', trigger: 'blur' },
   ],
-  roleType: [{ required: true, message: '请选择角色类型', trigger: 'change' }],
   description: [{ max: 200, message: '描述不超过 200 个字符', trigger: 'blur' }],
 }
 
@@ -82,7 +75,7 @@ async function submit(): Promise<void> {
     const role = await createRole({
       roleCode: form.roleCode.trim(),
       roleName: form.roleName.trim(),
-      roleType: form.roleType,
+      roleType: RoleType.FUNC,
       description: form.description.trim() || undefined,
     })
     ElMessage.success(`角色「${role.roleName}」创建成功`)
@@ -104,16 +97,6 @@ async function submit(): Promise<void> {
       </el-form-item>
       <el-form-item label="角色名称" prop="roleName" :error="serverErrors.roleName">
         <el-input v-model="form.roleName" maxlength="50" placeholder="如 合同审计员" />
-      </el-form-item>
-      <el-form-item label="角色类型" prop="roleType">
-        <el-select v-model="form.roleType" style="width: 100%">
-          <el-option
-            v-for="option in roleTypeOptions"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value"
-          />
-        </el-select>
       </el-form-item>
       <el-form-item label="描述（选填）" prop="description">
         <el-input

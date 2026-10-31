@@ -9,7 +9,7 @@ import { users } from './user'
 
 const now = () => fmt(0)
 
-type RoleType = 'FUNC' | 'DATA'
+type RoleType = 'FUNC'
 
 interface MockRole {
   id: number
@@ -63,12 +63,11 @@ function fmt(offsetDays: number, hour = 12, minute = 0): string {
 
 const roles: MockRole[] = [
   r(1, 'SYS_ADMIN', '系统管理员', 'FUNC', '平台全量管理权限', '2025-01-06 09:00:00'),
-  r(2, 'FINANCE_OFFICER', '财务经办', 'DATA', '财务单据经办岗数据权限', '2025-01-20 10:00:00'),
-  r(3, 'FINANCE_MANAGER', '财务主管', 'DATA', '财务单据审批与全分公司财务数据', '2025-01-20 10:10:00'),
+  r(2, 'FINANCE_OFFICER', '财务经办', 'FUNC', '财务单据经办功能权限', '2025-01-20 10:00:00'),
+  r(3, 'FINANCE_MANAGER', '财务主管', 'FUNC', '财务单据审批功能权限', '2025-01-20 10:10:00'),
   r(4, 'AUDITOR', '审计员', 'FUNC', '审计日志查询与合规检查', '2025-02-01 09:00:00'),
   r(5, 'HR_SPECIALIST', '人事专员', 'FUNC', '员工档案与账号管理', '2025-02-15 09:00:00'),
   r(6, 'PROJECT_MANAGER', '项目经理', 'FUNC', '项目部业务管理', '2025-03-10 09:00:00'),
-  r(7, 'SELF_DATA_VIEWER', '本人数据查看', 'DATA', '仅可查看本人相关数据', '2025-04-01 09:00:00'),
 ]
 
 function r(

@@ -21,12 +21,10 @@ export const AccountStatusLabel: Record<AccountStatusCode, string> = {
 /* 角色类型 RoleType */
 export const RoleType = {
   FUNC: 'FUNC',
-  DATA: 'DATA',
 } as const
 export type RoleTypeCode = (typeof RoleType)[keyof typeof RoleType]
 export const RoleTypeLabel: Record<RoleTypeCode, string> = {
   FUNC: '功能角色',
-  DATA: '岗位型数据角色',
 }
 
 /* 组织类型 OrgType（含层级映射，契约 8.3：orgType 与 orgLevel 联动，禁止手填） */
@@ -82,23 +80,6 @@ export const OperationActionLabel: Record<OperationActionCode, string> = {
   VIEW_EDIT_SELF: '查看/编辑本人',
 }
 
-/* 数据范围 DataScopeType */
-export const DataScopeType = {
-  ALL: 'ALL',
-  BRANCH: 'BRANCH',
-  DEPT: 'DEPT',
-  PROJECT: 'PROJECT',
-  SELF: 'SELF',
-} as const
-export type DataScopeTypeCode = (typeof DataScopeType)[keyof typeof DataScopeType]
-export const DataScopeTypeLabel: Record<DataScopeTypeCode, string> = {
-  ALL: '全公司',
-  BRANCH: '本分公司',
-  DEPT: '本部门',
-  PROJECT: '本项目',
-  SELF: '本人',
-}
-
 /* 通用状态（组织/角色/系统/功能点 status 字段） */
 export const CommonStatus = {
   ACTIVE: 'ACTIVE',
@@ -123,7 +104,6 @@ export const ChangeType = {
   REVOKE: 'REVOKE',
   SEAL: 'SEAL',
   ROLE_UPDATE: 'ROLE_UPDATE',
-  SCOPE_UPDATE: 'SCOPE_UPDATE',
 } as const
 export type ChangeTypeCode = (typeof ChangeType)[keyof typeof ChangeType]
 export const ChangeTypeLabel: Record<ChangeTypeCode, string> = {
@@ -131,7 +111,6 @@ export const ChangeTypeLabel: Record<ChangeTypeCode, string> = {
   REVOKE: '回收',
   SEAL: '封存',
   ROLE_UPDATE: '角色变更',
-  SCOPE_UPDATE: '数据范围变更',
 }
 
 /* 用户-角色授权状态（IamUserRole.status） */

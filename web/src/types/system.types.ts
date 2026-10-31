@@ -1,4 +1,4 @@
-import type { CommonStatusCode, DataScopeTypeCode, OperationActionCode } from '@/constants/enums'
+import type { CommonStatusCode, OperationActionCode } from '@/constants/enums'
 
 export interface System {
   id: number
@@ -75,30 +75,5 @@ export interface RoleFunctionBindPayload {
   roleId: number
   functionPointIds: number[]
   allowedAction: OperationActionCode
-  createdBy?: number
-}
-
-export interface DataScope {
-  id: number
-  scopeCode: string
-  scopeName: string
-  description?: string
-  sortNo: number
-  status: CommonStatusCode
-  createdAt: string
-}
-
-export interface DataScopeCreatePayload {
-  scopeCode: string
-  scopeName: string
-  description?: string
-  sortNo?: number
-}
-
-export interface RoleDataScopeBindPayload {
-  roleId: number
-  scopeType: DataScopeTypeCode
-  orgId?: number
-  projectId?: number
   createdBy?: number
 }
