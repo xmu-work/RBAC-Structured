@@ -3,10 +3,12 @@ package com.iam.platform.application.decision;
 import com.iam.platform.application.grant.GrantService;
 import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
+import com.iam.platform.common.enums.OperationAction;
 import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
 import com.iam.platform.infrastructure.persistence.entity.IamModule;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
+import com.iam.platform.infrastructure.persistence.entity.IamSystem;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
 import com.iam.platform.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +16,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -25,8 +30,8 @@ import java.util.stream.Collectors;
  * 被网关与业务系统通过 OpenAPI 调用。
  * 对应 FR-23～FR-26、UC-06。
  *
- * <p>结构化编程原则：决策过程为"收集策略→合并→判定"的线性流程，
- * 不使用面向对象的多态分发，保持过程内聚。
+ * <p>RBAC 判定链：用户正常 → 有效用户-角色绑定（未回收、在有效期内）→ 有效角色（含父角色继承）
+ * → 角色-功能绑定（allowed_action 覆盖功能点声明的操作）→ 功能点属于该子系统且系统/模块/功能点均启用。
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -69,10 +74,6 @@ public class DecisionService {
 
     /**
      * 查询用户在某子系统下已授权的功能点 ID 集合。
-     *
-     * <p>RBAC0 判定流程：
-     * 用户正常 → 有效的用户-角色绑定（未回收、在有效期内）→ 有效角色 →
-     * 角色-功能绑定 → 属于该子系统且有效的功能点。任一步为空即返回空集合。
      */
     // ponytail: 每次判定 5~6 次查库，高并发时在此加 Redis 权限快照缓存（PermissionCacheComponent），授权变更时失效
     public Set<Long> getUserFunctionPoints(Long userId, String systemCode) {
@@ -84,38 +85,102 @@ public class DecisionService {
             return Set.of();
         }
 
-        // 2. 有效的用户-角色绑定
+        // 2. 有效的用户-角色绑定（未回收、在有效期内）
         LocalDateTime now = LocalDateTime.now();
-        Set<Long> grantedRoleIds = userRoleRepository.findByUserIdAndStatus(userId, GrantService.GRANT_ACTIVE).stream()
+        Set<Long> directRoleIds = userRoleRepository.findByUserIdAndStatus(userId, GrantService.GRANT_ACTIVE).stream()
                 .filter(ur -> isEffective(ur, now))
                 .map(IamUserRole::getRoleId)
                 .collect(Collectors.toSet());
 
-        // 3. 过滤掉停用或已删除的角色
-        Set<Long> roleIds = roleRepository.findAllById(grantedRoleIds).stream()
-                .filter(r -> r.getIsDeleted() == 0 && RoleService.ROLE_ACTIVE.equals(r.getStatus()))
-                .map(IamRole::getId)
-                .collect(Collectors.toSet());
+        // 3. 有效角色 + 父角色（继承）
+        Set<Long> roleIds = collectActiveRolesWithAncestors(directRoleIds);
         if (roleIds.isEmpty()) {
             return Set.of();
         }
 
-        // 4. 角色 → 功能点
-        Set<Long> pointIds = roleFunctionRepository.findByRoleIdIn(roleIds).stream()
-                .map(IamRoleFunction::getFunctionPointId)
-                .collect(Collectors.toSet());
+        // 4. 角色 → 功能点，合并同一功能点的 allowed_action（取最宽松）
+        Map<Long, OperationAction> grantedActions = grantedActionsOf(roleIds);
+        if (grantedActions.isEmpty()) {
+            return Set.of();
+        }
 
-        // 5. 只保留属于该子系统、且有效的功能点
-        Set<Long> moduleIds = systemRepository.findBySystemCode(systemCode)
-                .map(s -> moduleRepository.findBySystemId(s.getId()).stream()
-                        .map(IamModule::getId)
-                        .collect(Collectors.toSet()))
-                .orElse(Set.of());
-        return functionPointRepository.findAllById(pointIds).stream()
-                .filter(fp -> moduleIds.contains(fp.getModuleId()))
+        // 5. 定位子系统及其启用模块
+        Long systemId = systemRepository.findBySystemCode(systemCode)
+                .filter(s -> s.getIsDeleted() == 0 && STATUS_ACTIVE.equals(s.getStatus()))
+                .map(IamSystem::getId)
+                .orElse(null);
+        if (systemId == null) {
+            return Set.of();
+        }
+        Set<Long> moduleIds = moduleRepository.findBySystemId(systemId).stream()
+                .filter(m -> m.getIsDeleted() == 0 && STATUS_ACTIVE.equals(m.getStatus()))
+                .map(IamModule::getId)
+                .collect(Collectors.toSet());
+        if (moduleIds.isEmpty()) {
+            return Set.of();
+        }
+
+        // 6. 功能点启用、属于该子系统、且已授予操作覆盖功能点声明的操作
+        return functionPointRepository.findAllById(grantedActions.keySet()).stream()
                 .filter(fp -> fp.getIsDeleted() == 0 && STATUS_ACTIVE.equals(fp.getStatus()))
+                .filter(fp -> moduleIds.contains(fp.getModuleId()))
+                .filter(fp -> actionCovers(grantedActions.get(fp.getId()), fp.getAction()))
                 .map(IamFunctionPoint::getId)
                 .collect(Collectors.toSet());
+    }
+
+    /**
+     * 收集启用角色及其祖先（parent_id 链），visited 去重以防御继承成环。
+     */
+    private Set<Long> collectActiveRolesWithAncestors(Set<Long> directRoleIds) {
+        Set<Long> result = new HashSet<>();
+        Set<Long> toVisit = new HashSet<>(directRoleIds);
+        while (!toVisit.isEmpty()) {
+            List<IamRole> roles = roleRepository.findAllById(toVisit);
+            Set<Long> next = new HashSet<>();
+            for (IamRole role : roles) {
+                if (role.getIsDeleted() != 0 || !RoleService.ROLE_ACTIVE.equals(role.getStatus())) {
+                    continue;
+                }
+                if (!result.add(role.getId())) {
+                    continue;
+                }
+                if (role.getParentId() != null) {
+                    next.add(role.getParentId());
+                }
+            }
+            toVisit = next;
+        }
+        return result;
+    }
+
+    /**
+     * 角色功能绑定的 allowed_action 合并：NONE 不授权，同一功能点多角色取能力最多的一项。
+     */
+    private Map<Long, OperationAction> grantedActionsOf(Set<Long> roleIds) {
+        Map<Long, OperationAction> grantedActions = new HashMap<>();
+        for (IamRoleFunction rf : roleFunctionRepository.findByRoleIdIn(roleIds)) {
+            OperationAction granted = parseAction(rf.getAllowedAction());
+            if (granted == null || granted == OperationAction.NONE) {
+                continue;
+            }
+            grantedActions.merge(rf.getFunctionPointId(), granted,
+                    (left, right) -> left.capabilityCount() >= right.capabilityCount() ? left : right);
+        }
+        return grantedActions;
+    }
+
+    private boolean actionCovers(OperationAction granted, String requiredCode) {
+        OperationAction required = parseAction(requiredCode);
+        return granted != null && required != null && granted.covers(required);
+    }
+
+    private OperationAction parseAction(String code) {
+        try {
+            return OperationAction.fromCode(code);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private boolean isEffective(IamUserRole grant, LocalDateTime now) {

@@ -57,13 +57,19 @@ class DecisionServiceTest {
         IamRoleFunction rf1 = new IamRoleFunction();
         rf1.setRoleId(2L);
         rf1.setFunctionPointId(100L);
+        rf1.setAllowedAction("ALL");
         IamRoleFunction rf2 = new IamRoleFunction();
         rf2.setRoleId(2L);
         rf2.setFunctionPointId(200L);
+        rf2.setAllowedAction("ALL");
         IamSystem admin = new IamSystem();
         admin.setId(1L);
+        admin.setStatus("ACTIVE");
+        admin.setIsDeleted(0);
         IamModule module = new IamModule();
         module.setId(10L);
+        module.setStatus("ACTIVE");
+        module.setIsDeleted(0);
 
         lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         lenient().when(userRoleRepository.findByUserIdAndStatus(1L, "ACTIVE")).thenReturn(List.of(grant));
@@ -78,6 +84,7 @@ class DecisionServiceTest {
         IamFunctionPoint fp = new IamFunctionPoint();
         fp.setId(id);
         fp.setModuleId(moduleId);
+        fp.setAction("ALL");
         fp.setStatus("ACTIVE");
         fp.setIsDeleted(0);
         return fp;
@@ -109,7 +116,6 @@ class DecisionServiceTest {
     @Test
     void expiredOrNotYetEffectiveGrantIsIgnored() {
         grant.setExpireTime(LocalDateTime.now().minusMinutes(1));
-        when(roleRepository.findAllById(Set.of())).thenReturn(List.of());
         assertThat(decisionService.getUserFunctionPoints(1L, "ADMIN")).isEmpty();
 
         grant.setExpireTime(null);

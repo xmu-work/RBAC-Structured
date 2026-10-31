@@ -4,6 +4,8 @@ import com.iam.platform.TestFixtures;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.crypto.CryptoComponent;
+import com.iam.platform.application.role.RoleService;
+import com.iam.platform.application.role.RoleService;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamUserRepository;
@@ -32,6 +34,8 @@ class GrantServiceTest {
     private IamUserRepository userRepository;
     @Mock
     private IamRoleRepository roleRepository;
+    @Mock
+    private RoleService roleService;
     @InjectMocks
     private GrantService grantService;
 

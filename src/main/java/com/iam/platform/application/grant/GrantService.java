@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 授权管理应用服务（M07）。
@@ -36,6 +38,7 @@ public class GrantService {
     private final IamUserRoleRepository userRoleRepository;
     private final IamUserRepository userRepository;
     private final IamRoleRepository roleRepository;
+    private final RoleService roleService;
 
     /**
      * 为用户授予角色。
@@ -70,6 +73,7 @@ public class GrantService {
         if (grant != null && GRANT_ACTIVE.equals(grant.getStatus())) {
             throw new BusinessException(ErrorCode.GRANT_DUPLICATE);
         }
+        checkRoleMutex(userId, roleId);
         if (grant == null) {
             grant = new IamUserRole();
             grant.setUserId(userId);
@@ -127,5 +131,20 @@ public class GrantService {
         grant.setStatus(GRANT_REVOKED);
         grant.setUpdatedAt(LocalDateTime.now());
         userRoleRepository.save(grant);
+    }
+
+    /**
+     * 校验角色互斥：本次授予后，用户角色集合中不得出现互斥对（FR-14）。
+     */
+    private void checkRoleMutex(Long userId, Long roleId) {
+        List<Long> candidate = userRoleRepository.findByUserIdAndStatus(userId, GRANT_ACTIVE).stream()
+                .map(IamUserRole::getRoleId)
+                .collect(Collectors.toCollection(ArrayList::new));
+        candidate.add(roleId);
+        long[] conflict = roleService.checkMutex(candidate);
+        if (conflict != null) {
+            throw new BusinessException(ErrorCode.ROLE_MUTEX_CONFLICT,
+                    "角色互斥冲突: " + conflict[0] + " 与 " + conflict[1]);
+        }
     }
 }
