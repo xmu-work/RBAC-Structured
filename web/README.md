@@ -22,15 +22,15 @@ pnpm lint         # ESLint + Stylelint
 - 按权限过滤的动态路由、侧边菜单、`v-perm` 元素级权限指令与 60 秒权限同步
 - 主布局、顶栏、面包屑、多页签、403/404/500 页面
 - Pinia 状态层、Axios 契约封装、完整 API/类型目录、分页组合式函数与字典 Store
-- 登录、权限与数据范围字典的契约级 Mock
+- 登录与功能权限相关接口的契约级 Mock
 
-当前业务模块使用占位页接入路由，领域页面与接口联调不在本次框架搭建范围内。
+当前组织、用户、角色、授权、功能权限、审计等业务页面已接入路由和 Mock 契约；数据权限页面按项目边界不提供。
 
 ## Mock / 联调切换
 
 - `web/.env.development` 中 `VITE_USE_MOCK=true`：vite-plugin-mock 按契约附录 B 签名拦截 `/api/v1/*` 并返回契约级数据。
 - Mock 模式下，登录页输入任意非空账号和密码即可进入管理后台。
-- 后端就绪后置 `false`：请求经 Vite proxy 至 `http://localhost:8080`（含契约 D1 双前缀的临时 rewrite 兜底，后端修复后移除）。
+- 后端联调时置 `false`：请求经 Vite proxy 至 `http://localhost:8080`。
 
 ## 目录契约（契约 2.1）
 
@@ -45,5 +45,3 @@ pnpm lint         # ESLint + Stylelint
 ## 待办
 
 - husky + lint-staged 提交即检（契约第 12 章，后续接入）
-- 后端修复 D1 双前缀后移除 vite.config.ts 中的临时 rewrite
-- 后端登记 `ADMIN` 系统及菜单功能点后，将 `src/constants/permissions.ts` 中的占位 ID 替换为真实主键
