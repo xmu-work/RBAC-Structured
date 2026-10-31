@@ -26,7 +26,7 @@ public class IamPermissionChangeLog {
     @Column(name = "role_id")
     private Long roleId;
 
-    /** GRANT / REVOKE / SEAL / ROLE_UPDATE / SCOPE_UPDATE */
+    /** GRANT / REVOKE / SEAL / ROLE_UPDATE */
     @Column(name = "change_type", nullable = false, length = 32)
     private String changeType;
 

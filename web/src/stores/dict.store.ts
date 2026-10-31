@@ -1,6 +1,5 @@
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { defineStore } from 'pinia'
-import { systemApi } from '@/api'
 import {
   AccountStatus,
   AccountStatusLabel,
@@ -8,8 +7,6 @@ import {
   ChangeTypeLabel,
   CommonStatus,
   CommonStatusLabel,
-  DataScopeType,
-  DataScopeTypeLabel,
   GrantStatus,
   GrantStatusLabel,
   OperationAction,
@@ -21,13 +18,12 @@ import {
   type AccountStatusCode,
   type ChangeTypeCode,
   type CommonStatusCode,
-  type DataScopeTypeCode,
   type GrantStatusCode,
   type OperationActionCode,
   type OrgTypeCode,
   type RoleTypeCode,
 } from '@/constants/enums'
-import type { DataScope, DictOption } from '@/types'
+import type { DictOption } from '@/types'
 
 function toOptions<T extends string>(
   values: Record<string, T>,
@@ -46,64 +42,19 @@ export const useDictStore = defineStore('dict', () => {
   const operationActionOptions = computed(() =>
     toOptions<OperationActionCode>(OperationAction, OperationActionLabel),
   )
-  const dataScopeTypeOptions = computed(() =>
-    toOptions<DataScopeTypeCode>(DataScopeType, DataScopeTypeLabel),
-  )
   const commonStatusOptions = computed(() => toOptions<CommonStatusCode>(CommonStatus, CommonStatusLabel))
   const changeTypeOptions = computed(() => toOptions<ChangeTypeCode>(ChangeType, ChangeTypeLabel))
   const grantStatusOptions = computed(() =>
     toOptions<GrantStatusCode>(GrantStatus, GrantStatusLabel),
   )
 
-  const dataScopes = ref<DataScope[]>([])
-  const dataScopesLoading = ref(false)
-  const dataScopesLoaded = ref(false)
-  const dataScopesError = ref<string | null>(null)
-
-  const dataScopeOptions = computed<DictOption[]>(() =>
-    dataScopes.value.map((scope) => ({
-      value: scope.scopeCode,
-      label: scope.scopeName,
-    })),
-  )
-
-  async function loadDataScopes(): Promise<void> {
-    if (dataScopesLoading.value || dataScopesLoaded.value) {
-      return
-    }
-    dataScopesLoading.value = true
-    dataScopesError.value = null
-    try {
-      dataScopes.value = await systemApi.listDataScopes()
-      dataScopesLoaded.value = true
-    } catch (error) {
-      dataScopesError.value = error instanceof Error ? error.message : '数据范围字典加载失败'
-    } finally {
-      dataScopesLoading.value = false
-    }
-  }
-
-  /** 字典新增登记后强制重拉（loadDataScopes 有 loaded 短路保护） */
-  async function refreshDataScopes(): Promise<void> {
-    dataScopesLoaded.value = false
-    await loadDataScopes()
-  }
-
   return {
     accountStatusOptions,
     roleTypeOptions,
     orgTypeOptions,
     operationActionOptions,
-    dataScopeTypeOptions,
     commonStatusOptions,
     changeTypeOptions,
     grantStatusOptions,
-    dataScopes,
-    dataScopesLoading,
-    dataScopesLoaded,
-    dataScopesError,
-    dataScopeOptions,
-    loadDataScopes,
-    refreshDataScopes,
   }
 })

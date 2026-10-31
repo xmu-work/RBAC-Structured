@@ -1,7 +1,7 @@
 import type { MockMethod } from 'vite-plugin-mock'
 
 /**
- * 系统 / 模块 / 功能点 / 角色-功能绑定 / 数据范围字典 契约级 Mock（契约 8.7 / 8.8 / 附录 B）
+ * 系统 / 模块 / 功能点 / 角色-功能绑定 契约级 Mock（契约 8.7 / 附录 B）
  * - [缺] 模块列表、功能点列表、矩阵查询、已有绑定查询端点（契约 11.2 D8），仅提供登记/绑定写接口
  * - 角色绑定走混合传参：query roleId/allowedAction + JSON Body functionPointIds（契约 4.2）
  */
@@ -161,86 +161,6 @@ function systemView(item: MockSystem): Record<string, unknown> {
 }
 
 export default [
-  /* ---------------- 数据范围字典（契约 8.8，dict store 消费） ---------------- */
-  {
-    url: '/api/v1/systems/data-scopes',
-    method: 'get',
-    response: () =>
-      ok([
-        {
-          id: 1,
-          scopeCode: 'ALL',
-          scopeName: '全公司',
-          description: '可访问全公司数据',
-          sortNo: 1,
-          status: 'ACTIVE',
-          createdAt: now,
-        },
-        {
-          id: 2,
-          scopeCode: 'BRANCH',
-          scopeName: '本分公司',
-          description: '仅可访问所属分公司数据',
-          sortNo: 2,
-          status: 'ACTIVE',
-          createdAt: now,
-        },
-        {
-          id: 3,
-          scopeCode: 'DEPT',
-          scopeName: '本部门',
-          description: '仅可访问所属部门数据',
-          sortNo: 3,
-          status: 'ACTIVE',
-          createdAt: now,
-        },
-        {
-          id: 4,
-          scopeCode: 'PROJECT',
-          scopeName: '本项目',
-          description: '仅可访问所属项目部数据',
-          sortNo: 4,
-          status: 'ACTIVE',
-          createdAt: now,
-        },
-        {
-          id: 5,
-          scopeCode: 'SELF',
-          scopeName: '本人',
-          description: '仅可访问本人数据',
-          sortNo: 5,
-          status: 'ACTIVE',
-          createdAt: now,
-        },
-      ]),
-  },
-  {
-    url: '/api/v1/systems/data-scopes',
-    method: 'post',
-    response: ({ query }: { query: Record<string, string> }) => {
-      const scopeCode = (query.scopeCode ?? '').trim()
-      const scopeName = (query.scopeName ?? '').trim()
-      const problems: string[] = []
-      if (!scopeCode) problems.push('scopeCode: 范围编码不能为空')
-      if (!scopeName) problems.push('scopeName: 范围名称不能为空')
-      if (problems.length > 0) {
-        return fail(1001, problems.join('; '))
-      }
-      if (['ALL', 'BRANCH', 'DEPT', 'PROJECT', 'SELF'].includes(scopeCode)) {
-        return fail(1001, 'scopeCode: 内置数据范围编码不可重复登记')
-      }
-      return ok({
-        id: 100,
-        scopeCode,
-        scopeName,
-        description: (query.description ?? '').trim() || undefined,
-        sortNo: Number(query.sortNo ?? 0) || 0,
-        status: 'ACTIVE',
-        createdAt: now,
-      })
-    },
-  },
-
   /* ---------------- 系统（契约 8.7） ---------------- */
   {
     url: '/api/v1/systems',
@@ -408,27 +328,4 @@ export default [
     },
   },
 
-  /* ---------------- 角色-数据范围授权（契约 8.8） ---------------- */
-  {
-    url: '/api/v1/systems/role-data-scopes',
-    method: 'post',
-    response: ({ query }: { query: Record<string, string> }) => {
-      const roleId = Number(query.roleId)
-      const scopeType = (query.scopeType ?? '').trim()
-      const validScopes = ['ALL', 'BRANCH', 'DEPT', 'PROJECT', 'SELF']
-      const problems: string[] = []
-      if (!Number.isInteger(roleId)) problems.push('roleId: 角色不能为空')
-      if (!validScopes.includes(scopeType)) problems.push('scopeType: 数据范围类型无效')
-      if ((scopeType === 'BRANCH' || scopeType === 'DEPT') && !Number.isInteger(Number(query.orgId))) {
-        problems.push('orgId: 分公司/部门范围必须指定组织')
-      }
-      if (scopeType === 'PROJECT' && !Number.isInteger(Number(query.projectId))) {
-        problems.push('projectId: 项目范围必须指定项目部')
-      }
-      if (problems.length > 0) {
-        return fail(1001, problems.join('; '))
-      }
-      return ok(null)
-    },
-  },
 ] as MockMethod[]

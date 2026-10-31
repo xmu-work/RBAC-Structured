@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { listRoles } from '@/api/role.api'
 import { useDict } from '@/composables/useDict'
-import { RoleType, type RoleTypeCode } from '@/constants/enums'
 import type { Role } from '@/types/role.types'
 import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
 import { dateTimeColumnFormatter } from '@/utils/time'
 
 /**
- * 角色列表卡片（契约 8.5）：后端全量返回不分页；roleType 前端即时过滤（小数据量）。
+ * 角色列表卡片（契约 8.5）：后端全量返回不分页；本项目只有功能角色。
  * 更新/停用/复制/删除 [缺] 端点，UI 不提供入口（契约 11.2 待办）。
  */
 const props = defineProps<{
@@ -24,12 +23,6 @@ const { dictLabel, roleTypeOptions } = useDict()
 const roles = ref<Role[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-const typeFilter = ref<RoleTypeCode | ''>('')
-
-const filteredRoles = computed(() =>
-  typeFilter.value === '' ? roles.value : roles.value.filter((role) => role.roleType === typeFilter.value),
-)
-
 async function loadRoles(): Promise<void> {
   loading.value = true
   error.value = null
@@ -73,16 +66,6 @@ defineExpose({ reload: loadRoles })
       </div>
     </template>
 
-    <div class="role-list-card__filter">
-      <span class="role-list-card__filter-label">类型</span>
-      <el-radio-group v-model="typeFilter">
-        <el-radio-button value="">全部</el-radio-button>
-        <el-radio-button v-for="option in roleTypeOptions" :key="option.value" :value="option.value">
-          {{ option.label }}
-        </el-radio-button>
-      </el-radio-group>
-    </div>
-
     <el-alert
       v-if="error"
       class="role-list-card__error"
@@ -96,7 +79,7 @@ defineExpose({ reload: loadRoles })
     <el-table
       v-else
       v-loading="loading"
-      :data="filteredRoles"
+      :data="roles"
       highlight-current-row
       class="role-list-card__table"
       @current-change="handleCurrentChange"
@@ -105,7 +88,7 @@ defineExpose({ reload: loadRoles })
       <el-table-column prop="roleName" label="角色名称" min-width="120" />
       <el-table-column label="类型" min-width="120">
         <template #default="{ row }">
-          <el-tag :type="row.roleType === RoleType.FUNC ? 'primary' : 'success'" effect="light">
+          <el-tag type="primary" effect="light">
             {{ dictLabel(roleTypeOptions, row.roleType) }}
           </el-tag>
         </template>
@@ -141,18 +124,6 @@ defineExpose({ reload: loadRoles })
   margin: var(--space-2) var(--space-0) var(--space-0);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-}
-
-.role-list-card__filter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
-.role-list-card__filter-label {
-  color: var(--color-text-regular);
-  font-size: var(--font-size-base);
 }
 
 .role-list-card__error {

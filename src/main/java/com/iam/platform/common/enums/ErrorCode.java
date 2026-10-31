@@ -28,7 +28,6 @@ public enum ErrorCode {
     ACCOUNT_SEALED(2005, "账号已封存（离职）", 403),
     ACCOUNT_DISABLED(2006, "账号停用或锁定", 403),
     NO_FUNCTION_PERM(2007, "无功能权限", 403),
-    OUT_OF_DATA_SCOPE(2008, "越数据范围", 403),
     SIGNATURE_INVALID(2009, "对外接口签名校验失败", 401),
     REPLAY_DETECTED(2010, "防重放命中", 401),
     APP_DISABLED(2011, "业务系统接入已停用", 403),
@@ -40,7 +39,6 @@ public enum ErrorCode {
     USER_ALREADY_SEALED(3004, "用户已封存", 409),
     GRANT_DUPLICATE(3005, "重复授权", 409),
     APPROVAL_REQUIRED(3006, "需审批流", 409),
-    DATA_SCOPE_EXPIRED(3007, "临时授权已过期", 409),
     LOCK_ACQUIRE_FAILED(3008, "分布式锁获取失败", 409),
     RESOURCE_DUPLICATE(3009, "资源已存在", 409),
     // 操作对象（而非当前登录人）的账号状态不允许该操作；不能用 2005/2006，否则前端会把操作人强制登出

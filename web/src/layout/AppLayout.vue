@@ -10,7 +10,6 @@ const appStore = useAppStore()
 
 usePermissionSync()
 
-// 数据范围字典不在框架挂载时加载：后端 RBAC3 阶段才实现，提前加载会每次弹 500（契约第 7 章）；由数据权限页按需加载
 </script>
 
 <template>

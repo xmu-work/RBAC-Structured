@@ -58,7 +58,7 @@ async function handleConfirm(): Promise<void> {
       :title="`高危操作：封存用于员工离职`"
     >
       <p class="user-seal-dialog__consequence">
-        封存后系统将解绑该用户的全部角色与数据权限、吊销其登录令牌，且该账号将无法再登录（UC-02）。此操作用于离职场景，请与人事流程核对后继续。
+        封存后系统将解绑该用户的全部角色、吊销其登录令牌，且该账号将无法再登录（UC-02）。此操作用于离职场景，请与人事流程核对后继续。
       </p>
     </el-alert>
 

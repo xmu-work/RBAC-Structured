@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS iam_role (
     id          BIGINT       NOT NULL AUTO_INCREMENT,
     role_code   VARCHAR(64)  NOT NULL COMMENT '角色编码',
     role_name   VARCHAR(128) NOT NULL COMMENT '角色名称',
-    role_type   VARCHAR(16)  NOT NULL COMMENT 'FUNC=功能角色 / DATA=岗位型数据角色',
+    role_type   VARCHAR(16)  NOT NULL COMMENT '本项目固定为 FUNC=功能角色',
     parent_id   BIGINT       NULL     COMMENT '父角色（RBAC1 继承，RBAC0 不使用）',
     status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
     description VARCHAR(500) NULL,
@@ -200,40 +200,7 @@ CREATE TABLE IF NOT EXISTS iam_role_function (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-功能关联';
 
 -- ----------------------------------------------------------
--- 10. 数据范围表
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_data_scope (
-    id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    scope_code  VARCHAR(32)   NOT NULL COMMENT '编码：ALL / BRANCH / DEPT / PROJECT / SELF',
-    scope_name  VARCHAR(64)   NOT NULL COMMENT '名称：全公司/本分公司/本部门/本项目/本人',
-    description VARCHAR(255)  NULL     COMMENT '说明',
-    sort_no     INT           NOT NULL DEFAULT 0 COMMENT '排序',
-    status      VARCHAR(16)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE / DISABLED',
-    created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_scope_code (scope_code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据范围字典';
-
--- ----------------------------------------------------------
--- 11. 角色-数据范围关联表
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_role_data_scope (
-    id             BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    role_id        BIGINT        NOT NULL COMMENT '角色',
-    scope_type     VARCHAR(32)   NOT NULL COMMENT '数据范围类型',
-    org_id         BIGINT        NULL     COMMENT '绑定组织（本分公司/本部门时使用）',
-    project_id     BIGINT        NULL     COMMENT '绑定项目（本项目时使用，指向 org_type=PROJECT 节点）',
-    effective_time DATETIME      NULL     COMMENT '生效时间（临时授权）',
-    expire_time    DATETIME      NULL     COMMENT '失效时间',
-    created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    created_by     BIGINT        NULL     COMMENT '授权人',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_role_scope (role_id, scope_type, org_id, project_id),
-    CONSTRAINT fk_rds_role FOREIGN KEY (role_id) REFERENCES iam_role (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-数据范围授权';
-
--- ----------------------------------------------------------
--- 12. 令牌表
+-- 10. 令牌表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_token (
     token_id    VARCHAR(64)  NOT NULL COMMENT '令牌唯一标识',
@@ -254,7 +221,7 @@ CREATE TABLE IF NOT EXISTS iam_token (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
 
 -- ----------------------------------------------------------
--- 13. 审计日志表
+-- 11. 审计日志表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_audit_log (
     log_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键，自增',
@@ -274,13 +241,13 @@ CREATE TABLE IF NOT EXISTS iam_audit_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志（只追加、永久保存）';
 
 -- ----------------------------------------------------------
--- 14. 权限变更日志表
+-- 12. 权限变更日志表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_permission_change_log (
     change_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
     user_id         BIGINT        NULL     COMMENT '受影响用户（角色级变更可空）',
     role_id         BIGINT        NULL     COMMENT '受影响角色（用户级变更可空）',
-    change_type     VARCHAR(32)   NOT NULL COMMENT '类型：GRANT / REVOKE / SEAL / ROLE_UPDATE / SCOPE_UPDATE',
+    change_type     VARCHAR(32)   NOT NULL COMMENT '类型：GRANT / REVOKE / SEAL / ROLE_UPDATE',
     before_snapshot JSON          NULL     COMMENT '变更前快照',
     after_snapshot  JSON          NULL     COMMENT '变更后快照',
     operator        BIGINT        NULL     COMMENT '操作人',

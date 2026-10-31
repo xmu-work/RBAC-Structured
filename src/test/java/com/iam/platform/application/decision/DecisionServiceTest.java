@@ -36,10 +36,6 @@ class DecisionServiceTest {
     private IamRoleRepository roleRepository;
     @Mock
     private IamRoleFunctionRepository roleFunctionRepository;
-    @Mock
-    private IamRoleDataScopeRepository roleDataScopeRepository;
-    @Mock
-    private IamOrgRepository orgRepository;
     @InjectMocks
     private DecisionService decisionService;
 
@@ -123,6 +119,12 @@ class DecisionServiceTest {
     }
 
     @Test
+    void nonFunctionRoleGrantsNothing() {
+        role.setRoleType("DATA");
+        assertThat(decisionService.getUserFunctionPoints(1L, "ADMIN")).isEmpty();
+    }
+
+    @Test
     void disabledPointIsFilteredByQuery() {
         // 功能点停用由 join 查询（SQL）过滤，查询不再返回候选
         when(roleFunctionRepository.findGrantedPoints(any(), eq("ADMIN"))).thenReturn(List.of());
@@ -144,15 +146,4 @@ class DecisionServiceTest {
         assertThat(result.getResults()).containsEntry(100L, true).containsEntry(200L, false);
     }
 
-    @Test
-    void dataScopeSelfAllowsOnlySelf() {
-        IamRoleDataScope self = new IamRoleDataScope();
-        self.setRoleId(2L);
-        self.setScopeType("SELF");
-        when(roleDataScopeRepository.findByRoleId(2L)).thenReturn(List.of(self));
-
-        assertThat(decisionService.decide(1L, "ADMIN", 100L, new ResourceContext(1L, null, null)).allowed()).isTrue();
-        assertThat(decisionService.decide(1L, "ADMIN", 100L, new ResourceContext(9L, null, null)).allowed()).isFalse();
-        assertThat(decisionService.decide(1L, "ADMIN", 100L, null).allowed()).isTrue();
-    }
 }

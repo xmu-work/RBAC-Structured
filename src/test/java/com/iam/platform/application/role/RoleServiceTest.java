@@ -52,6 +52,8 @@ class RoleServiceTest {
                 .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo(ErrorCode.RESOURCE_DUPLICATE.getCode()));
         assertThatThrownBy(() -> roleService.createRole("X", "x", "BAD", null))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> roleService.createRole("DATA_ONLY", "数据角色", "DATA", null))
+                .isInstanceOf(IllegalArgumentException.class);
         verify(roleRepository, never()).save(any());
     }
 
@@ -68,8 +70,10 @@ class RoleServiceTest {
         IamRole active = TestFixtures.role(1L, "ACTIVE");
         IamRole deleted = TestFixtures.role(2L, "ACTIVE");
         deleted.setIsDeleted(1);
+        IamRole dataRole = TestFixtures.role(3L, "ACTIVE");
+        dataRole.setRoleType("DATA");
         when(roleRepository.findById(1L)).thenReturn(Optional.of(active));
-        when(roleRepository.findAll()).thenReturn(List.of(active, deleted));
+        when(roleRepository.findAll()).thenReturn(List.of(active, deleted, dataRole));
 
         assertThat(roleService.getRole(1L)).isSameAs(active);
         assertThat(roleService.listRoles()).containsExactly(active);

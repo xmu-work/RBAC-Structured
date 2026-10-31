@@ -1,9 +1,7 @@
 package com.iam.platform.interfaces.admin;
 
-import com.iam.platform.application.permission.DataPermissionService;
 import com.iam.platform.application.permission.FunctionPermissionService;
 import com.iam.platform.common.result.Result;
-import com.iam.platform.infrastructure.persistence.entity.IamDataScope;
 import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
 import com.iam.platform.infrastructure.persistence.entity.IamModule;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
@@ -22,7 +20,7 @@ import java.util.List;
 /**
  * 子系统与功能权限管理控制器（管理端）。
  *
- * <p>对应 API：/api/v1/systems/*、/api/v1/data-scopes/*
+ * <p>对应 API：/api/v1/systems/*
  */
 @Slf4j
 @Validated
@@ -35,7 +33,6 @@ public class SystemController {
     private static final int MAX_BATCH_FUNCTION_POINTS = 200;
 
     private final FunctionPermissionService functionPermissionService;
-    private final DataPermissionService dataPermissionService;
 
     /**
      * 注册接入子系统。
@@ -110,35 +107,4 @@ public class SystemController {
         return Result.success(functionPermissionService.getRoleFunctions(roleId));
     }
 
-    /**
-     * 创建数据范围。
-     */
-    @PostMapping("/data-scopes")
-    public Result<IamDataScope> createDataScope(@RequestParam @NotBlank @Size(max = 32) String scopeCode,
-                                                @RequestParam @NotBlank @Size(max = 64) String scopeName,
-                                                @RequestParam(required = false) @Size(max = 255) String description,
-                                                @RequestParam(required = false) Integer sortNo) {
-        return Result.success(dataPermissionService.createDataScope(scopeCode, scopeName, description, sortNo));
-    }
-
-    /**
-     * 查询全部数据范围。
-     */
-    @GetMapping("/data-scopes")
-    public Result<List<IamDataScope>> listDataScopes() {
-        return Result.success(dataPermissionService.listDataScopes());
-    }
-
-    /**
-     * 为角色绑定数据范围。
-     */
-    @PostMapping("/role-data-scopes")
-    public Result<Void> bindRoleDataScope(@RequestParam @NotNull Long roleId,
-                                          @RequestParam @NotBlank String scopeType,
-                                          @RequestParam(required = false) Long orgId,
-                                          @RequestParam(required = false) Long projectId,
-                                          @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long createdBy) {
-        dataPermissionService.bindRoleDataScope(roleId, scopeType, orgId, projectId, createdBy);
-        return Result.success();
-    }
 }

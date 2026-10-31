@@ -56,7 +56,7 @@ async function handleConfirm(): Promise<void> {
       :closable="false"
       show-icon
       title="高危操作：回收即时生效"
-      description="回收后该用户立即失去此角色对应的全部功能权限与数据权限；服务端权限缓存最多 300 秒内完全收敛。"
+      description="回收后该用户立即失去此角色对应的全部功能权限；服务端权限缓存最多 300 秒内完全收敛。"
     />
 
     <el-form ref="formRef" :model="{ reason }" :rules="rules" label-position="top">

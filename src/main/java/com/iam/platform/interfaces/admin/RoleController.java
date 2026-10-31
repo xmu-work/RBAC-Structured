@@ -39,7 +39,7 @@ public class RoleController {
     @PostMapping
     public Result<IamRole> create(@RequestParam @NotBlank @Size(max = 64) String roleCode,
                                   @RequestParam @NotBlank @Size(max = 128) String roleName,
-                                  @RequestParam @NotBlank String roleType,
+                                  @RequestParam(defaultValue = "FUNC") @NotBlank String roleType,
                                   @RequestParam(required = false) @Size(max = 500) String description) {
         return Result.success(roleService.createRole(roleCode, roleName, roleType, description));
     }

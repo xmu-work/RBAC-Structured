@@ -17,6 +17,5 @@ export function useDict() {
   return {
     ...storeToRefs(store),
     dictLabel,
-    loadDataScopes: store.loadDataScopes,
   }
 }
