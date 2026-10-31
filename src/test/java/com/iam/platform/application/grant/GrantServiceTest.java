@@ -5,8 +5,10 @@ import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.crypto.CryptoComponent;
 import com.iam.platform.application.role.RoleService;
-import com.iam.platform.application.role.RoleService;
+import com.iam.platform.application.decision.DecisionService;
+import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
+import com.iam.platform.infrastructure.persistence.repository.IamRoleFunctionRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamUserRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamUserRoleRepository;
@@ -19,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +39,10 @@ class GrantServiceTest {
     private IamRoleRepository roleRepository;
     @Mock
     private RoleService roleService;
+    @Mock
+    private IamRoleFunctionRepository roleFunctionRepository;
+    @Mock
+    private DecisionService decisionService;
     @InjectMocks
     private GrantService grantService;
 
@@ -166,5 +173,21 @@ class GrantServiceTest {
         when(userRoleRepository.findByUserId(1L)).thenReturn(grants);
 
         assertThat(grantService.getUserRoles(1L)).isSameAs(grants);
+    }
+
+    @Test
+    void grantRejectsRoleWithPermissionsBeyondOperator() {
+        givenUserAndRole("NORMAL", "ACTIVE");
+        when(userRoleRepository.findByUserIdAndRoleId(1L, 2L)).thenReturn(Optional.empty());
+        when(roleRepository.findAllById(any())).thenReturn(List.of(TestFixtures.role(2L, "ACTIVE")));
+        IamRoleFunction rf = new IamRoleFunction();
+        rf.setRoleId(2L);
+        rf.setFunctionPointId(50L);
+        when(roleFunctionRepository.findByRoleId(2L)).thenReturn(List.of(rf));
+        when(decisionService.getUserFunctionPoints(9L, "ADMIN")).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> grantService.grantRole(1L, 2L, null, 9L, null))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.NO_FUNCTION_PERM.getCode()));
+        verify(userRoleRepository, never()).save(any());
     }
 }
