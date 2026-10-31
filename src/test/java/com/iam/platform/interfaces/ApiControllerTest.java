@@ -69,7 +69,24 @@ class ApiControllerTest {
     void setUp() {
         when(authService.authenticate("good-token")).thenReturn(1L);
         when(authService.authenticate("bad-token")).thenThrow(new BusinessException(ErrorCode.TOKEN_INVALID));
-        when(functionPermissionService.findByApi(any(), any())).thenReturn(Optional.empty());
+        // fail-closed：默认把接口视为“已登记 + 有权限”，未登记/无权限由各用例覆盖
+        IamFunctionPoint registered = new IamFunctionPoint();
+        registered.setId(90000L);
+        registered.setPointName("测试接口");
+        when(functionPermissionService.findByApi(any(), any())).thenReturn(Optional.of(registered));
+        when(decisionService.hasPermission(anyLong(), eq(AuthService.ADMIN_SYSTEM_CODE), anyLong())).thenReturn(true);
+    }
+
+    @Test
+    void unregisteredApiIsDeniedByDefault() throws Exception {
+        // 未登记为功能点的接口默认拒绝（fail-closed），不再放行任意已登录用户
+        when(functionPermissionService.findByApi("/users", "POST")).thenReturn(Optional.empty());
+
+        mvc.perform(post("/users").header("Authorization", AUTH)
+                        .param("userNo", "x").param("realName", "张三").param("orgId", "1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NO_FUNCTION_PERM.getCode()));
+        verify(accountService, never()).createUser(any(), any(), any(), any(), any(), any());
     }
 
     // ---------- 认证与鉴权 ----------
