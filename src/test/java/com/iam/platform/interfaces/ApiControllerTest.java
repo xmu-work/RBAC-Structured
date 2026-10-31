@@ -6,6 +6,7 @@ import com.iam.platform.application.audit.AuditService;
 import com.iam.platform.application.auth.AuthService;
 import com.iam.platform.application.auth.LoginResponse;
 import com.iam.platform.application.decision.DecisionService;
+import com.iam.platform.application.decision.DecisionResult;
 import com.iam.platform.application.decision.PermissionCheckResult;
 import com.iam.platform.application.grant.GrantService;
 import com.iam.platform.application.organization.OrganizationService;
@@ -323,5 +324,26 @@ class ApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0]").value(100));
         verify(openApiAuthenticator).verify("OA", "1", "n", "s");
+    }
+
+    @Test
+    void openApiDataScopeEndpoint() throws Exception {
+        when(decisionService.resolveDataScopes(1L, "ADMIN")).thenReturn(List.of());
+
+        mvc.perform(get("/open/data-scope").header("Authorization", AUTH)
+                        .param("userId", "1").param("systemCode", "ADMIN"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void openApiResourceEndpoint() throws Exception {
+        when(decisionService.decide(eq(1L), eq("ADMIN"), eq(100L), any()))
+                .thenReturn(new DecisionResult(true, true, List.of()));
+
+        mvc.perform(post("/open/authorize/resource").header("Authorization", AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":1,\"systemCode\":\"ADMIN\",\"functionPointId\":100}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.allowed").value(true));
     }
 }

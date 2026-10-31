@@ -61,7 +61,8 @@ public class RoleController {
     public Result<Void> addExclusion(@PathVariable Long roleId,
                                      @RequestParam Long excludedRoleId,
                                      @RequestParam(required = false) String reason) {
-        throw new UnsupportedOperationException("待实现");
+        roleService.addRoleExclusion(roleId, excludedRoleId, reason);
+        return Result.success();
     }
 
     /**
@@ -69,7 +70,7 @@ public class RoleController {
      */
     @GetMapping("/{roleId}/exclusions")
     public Result<List<IamRoleExclusion>> exclusions(@PathVariable Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(roleService.getExclusions(roleId));
     }
 
     /**

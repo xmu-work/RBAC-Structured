@@ -109,7 +109,7 @@ public class SystemController {
                                                 @RequestParam String scopeName,
                                                 @RequestParam(required = false) String description,
                                                 @RequestParam(required = false) Integer sortNo) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(dataPermissionService.createDataScope(scopeCode, scopeName, description, sortNo));
     }
 
     /**
@@ -117,7 +117,7 @@ public class SystemController {
      */
     @GetMapping("/data-scopes")
     public Result<List<IamDataScope>> listDataScopes() {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(dataPermissionService.listDataScopes());
     }
 
     /**
@@ -129,6 +129,7 @@ public class SystemController {
                                           @RequestParam(required = false) Long orgId,
                                           @RequestParam(required = false) Long projectId,
                                           @RequestParam(required = false) Long createdBy) {
-        throw new UnsupportedOperationException("待实现");
+        dataPermissionService.bindRoleDataScope(roleId, scopeType, orgId, projectId, createdBy);
+        return Result.success();
     }
 }

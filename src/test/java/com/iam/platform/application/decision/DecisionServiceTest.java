@@ -40,6 +40,10 @@ class DecisionServiceTest {
     private IamModuleRepository moduleRepository;
     @Mock
     private IamSystemRepository systemRepository;
+    @Mock
+    private IamRoleDataScopeRepository roleDataScopeRepository;
+    @Mock
+    private IamOrgRepository orgRepository;
     @InjectMocks
     private DecisionService decisionService;
 
@@ -140,5 +144,17 @@ class DecisionServiceTest {
         PermissionCheckResult result = decisionService.checkPermissions(1L, "ADMIN", List.of(100L, 200L));
 
         assertThat(result.getResults()).containsEntry(100L, true).containsEntry(200L, false);
+    }
+
+    @Test
+    void dataScopeSelfAllowsOnlySelf() {
+        IamRoleDataScope self = new IamRoleDataScope();
+        self.setRoleId(2L);
+        self.setScopeType("SELF");
+        when(roleDataScopeRepository.findByRoleId(2L)).thenReturn(List.of(self));
+
+        assertThat(decisionService.decide(1L, "ADMIN", 100L, new ResourceContext(1L, null, null)).allowed()).isTrue();
+        assertThat(decisionService.decide(1L, "ADMIN", 100L, new ResourceContext(9L, null, null)).allowed()).isFalse();
+        assertThat(decisionService.decide(1L, "ADMIN", 100L, null).allowed()).isTrue();
     }
 }

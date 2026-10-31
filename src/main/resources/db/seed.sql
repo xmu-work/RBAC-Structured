@@ -52,7 +52,12 @@ INSERT INTO iam_function_point (id, module_id, point_code, point_name, action, a
 (20019, 2, 'ORG_CREATE',         '新建组织',         'ALL',  '/orgs',                       'POST',   'ACTIVE', 0),
 (20020, 2, 'ORG_GET',            '查询组织详情',     'VIEW', '/orgs/{orgId}',               'GET',    'ACTIVE', 0),
 (20021, 2, 'ORG_CHILDREN',       '查询下级组织',     'VIEW', '/orgs/{orgId}/children',      'GET',    'ACTIVE', 0),
-(20022, 2, 'ORG_MOVE',           '移动组织节点',     'ALL',  '/orgs/{orgId}/move',          'PUT',    'ACTIVE', 0);
+(20022, 2, 'ORG_MOVE',           '移动组织节点',     'ALL',  '/orgs/{orgId}/move',          'PUT',    'ACTIVE', 0),
+(20023, 2, 'DATA_SCOPE_CREATE',  '创建数据范围',     'ALL',  '/systems/data-scopes',        'POST',   'ACTIVE', 0),
+(20024, 2, 'DATA_SCOPE_LIST',    '查询数据范围',     'VIEW', '/systems/data-scopes',        'GET',    'ACTIVE', 0),
+(20025, 2, 'ROLE_SCOPE_BIND',    '绑定角色数据范围', 'ALL',  '/systems/role-data-scopes',   'POST',   'ACTIVE', 0),
+(20026, 2, 'ROLE_EXCL_ADD',      '配置角色互斥',     'ALL',  '/roles/{roleId}/exclusions',  'POST',   'ACTIVE', 0),
+(20027, 2, 'ROLE_EXCL_LIST',     '查询角色互斥',     'VIEW', '/roles/{roleId}/exclusions',  'GET',    'ACTIVE', 0);
 
 -- 4. 超级管理员角色，拥有以上全部功能点
 INSERT INTO iam_role (id, role_code, role_name, role_type, status, description, is_deleted)
