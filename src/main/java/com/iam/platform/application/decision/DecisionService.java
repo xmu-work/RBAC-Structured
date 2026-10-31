@@ -5,12 +5,8 @@ import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
 import com.iam.platform.common.enums.DataScopeType;
 import com.iam.platform.common.enums.OperationAction;
-import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
-import com.iam.platform.infrastructure.persistence.entity.IamModule;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleDataScope;
-import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
-import com.iam.platform.infrastructure.persistence.entity.IamSystem;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
 import com.iam.platform.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,21 +32,17 @@ import java.util.stream.Collectors;
  *
  * <p>RBAC 判定链：用户正常 → 有效用户-角色绑定（未回收、在有效期内）→ 有效角色（含父角色继承）
  * → 角色-功能绑定（allowed_action 覆盖功能点声明的操作）→ 功能点属于该子系统且系统/模块/功能点均启用。
+ * 角色→功能点的候选由单条 join 查询一次性取得，避免多轮查库。
  */
 @Slf4j
 @RequiredArgsConstructor
 @Service
 public class DecisionService {
 
-    private static final String STATUS_ACTIVE = "ACTIVE";
-
     private final IamUserRepository userRepository;
     private final IamUserRoleRepository userRoleRepository;
     private final IamRoleRepository roleRepository;
     private final IamRoleFunctionRepository roleFunctionRepository;
-    private final IamFunctionPointRepository functionPointRepository;
-    private final IamModuleRepository moduleRepository;
-    private final IamSystemRepository systemRepository;
     private final IamRoleDataScopeRepository roleDataScopeRepository;
     private final IamOrgRepository orgRepository;
 
@@ -97,7 +88,6 @@ public class DecisionService {
     /**
      * 查询用户在某子系统下已授权的功能点 ID 集合。
      */
-    // ponytail: 每次判定 5~6 次查库，高并发时在此加 Redis 权限快照缓存（PermissionCacheComponent），授权变更时失效
     @Transactional(readOnly = true)
     public Set<Long> getUserFunctionPoints(Long userId, String systemCode) {
         // 1. 用户必须存在且为正常状态
@@ -108,31 +98,26 @@ public class DecisionService {
             return Set.of();
         }
 
-        // 2. 有效的用户-角色绑定（未回收、在有效期内）
+        // 2. 有效角色（含父角色继承）
         Set<Long> roleIds = activeRoleIds(userId);
         if (roleIds.isEmpty()) {
             return Set.of();
         }
 
-        // 3. 角色 → 功能点，合并同一功能点的 allowed_action（取最宽松）
-        Map<Long, OperationAction> grantedActions = grantedActionsOf(roleIds);
-        if (grantedActions.isEmpty()) {
-            return Set.of();
+        // 3. 单条 join 查询取候选功能点（已按系统/模块/功能点启用过滤），并合并 allowed_action 覆盖判定
+        Set<Long> granted = new HashSet<>();
+        for (IamRoleFunctionRepository.GrantedPointView view
+                : roleFunctionRepository.findGrantedPoints(roleIds, systemCode)) {
+            OperationAction allowed = parseAction(view.getAllowedAction());
+            if (allowed == null || allowed == OperationAction.NONE) {
+                continue;
+            }
+            OperationAction required = parseAction(view.getRequiredAction());
+            if (required != null && allowed.covers(required)) {
+                granted.add(view.getFunctionPointId());
+            }
         }
-
-        // 4. 定位子系统及其启用模块
-        Set<Long> moduleIds = activeModuleIds(systemCode);
-        if (moduleIds.isEmpty()) {
-            return Set.of();
-        }
-
-        // 5. 功能点启用、属于该子系统、且已授予操作覆盖功能点声明的操作
-        return functionPointRepository.findAllById(grantedActions.keySet()).stream()
-                .filter(fp -> fp.getIsDeleted() == 0 && STATUS_ACTIVE.equals(fp.getStatus()))
-                .filter(fp -> moduleIds.contains(fp.getModuleId()))
-                .filter(fp -> actionCovers(grantedActions.get(fp.getId()), fp.getAction()))
-                .map(IamFunctionPoint::getId)
-                .collect(Collectors.toSet());
+        return granted;
     }
 
     /**
@@ -251,41 +236,6 @@ public class DecisionService {
             toVisit = next;
         }
         return result;
-    }
-
-    private Set<Long> activeModuleIds(String systemCode) {
-        Long systemId = systemRepository.findBySystemCode(systemCode)
-                .filter(s -> s.getIsDeleted() == 0 && STATUS_ACTIVE.equals(s.getStatus()))
-                .map(IamSystem::getId)
-                .orElse(null);
-        if (systemId == null) {
-            return Set.of();
-        }
-        return moduleRepository.findBySystemId(systemId).stream()
-                .filter(m -> m.getIsDeleted() == 0 && STATUS_ACTIVE.equals(m.getStatus()))
-                .map(IamModule::getId)
-                .collect(Collectors.toSet());
-    }
-
-    /**
-     * 角色功能绑定的 allowed_action 合并：NONE 不授权，同一功能点多角色取能力最多的一项。
-     */
-    private Map<Long, OperationAction> grantedActionsOf(Set<Long> roleIds) {
-        Map<Long, OperationAction> grantedActions = new HashMap<>();
-        for (IamRoleFunction rf : roleFunctionRepository.findByRoleIdIn(roleIds)) {
-            OperationAction granted = parseAction(rf.getAllowedAction());
-            if (granted == null || granted == OperationAction.NONE) {
-                continue;
-            }
-            grantedActions.merge(rf.getFunctionPointId(), granted,
-                    (left, right) -> left.capabilityCount() >= right.capabilityCount() ? left : right);
-        }
-        return grantedActions;
-    }
-
-    private boolean actionCovers(OperationAction granted, String requiredCode) {
-        OperationAction required = parseAction(requiredCode);
-        return granted != null && required != null && granted.covers(required);
     }
 
     private OperationAction parseAction(String code) {
