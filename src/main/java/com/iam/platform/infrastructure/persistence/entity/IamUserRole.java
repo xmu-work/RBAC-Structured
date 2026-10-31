@@ -48,4 +48,9 @@ public class IamUserRole {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /** 乐观锁版本号 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

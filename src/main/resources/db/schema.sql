@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS iam_org (
     is_deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '软删除标记',
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    version        BIGINT        NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by     BIGINT        NULL     COMMENT '创建人',
     updated_by     BIGINT        NULL     COMMENT '更新人',
     PRIMARY KEY (id),
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS iam_user (
     is_deleted     TINYINT      NOT NULL DEFAULT 0,
     created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version        BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by     BIGINT       NULL,
     updated_by     BIGINT       NULL,
     PRIMARY KEY (id),
@@ -72,6 +74,7 @@ CREATE TABLE IF NOT EXISTS iam_role (
     is_deleted  TINYINT      NOT NULL DEFAULT 0,
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version     BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by  BIGINT       NULL,
     updated_by  BIGINT       NULL,
     PRIMARY KEY (id),
@@ -107,6 +110,7 @@ CREATE TABLE IF NOT EXISTS iam_user_role (
     status         VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/EXPIRED/REVOKED',
     created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version        BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_role (user_id, role_id),
     KEY idx_ur_role (role_id)
@@ -127,6 +131,7 @@ CREATE TABLE IF NOT EXISTS iam_system (
     is_deleted   TINYINT      NOT NULL DEFAULT 0,
     created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version      BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (id),
     UNIQUE KEY uk_system_code (system_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接入子系统';
