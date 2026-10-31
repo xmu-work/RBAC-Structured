@@ -6,7 +6,7 @@ export interface Result<T = unknown> {
   code: number
   message: string
   data?: T
-  /** [待后端] 当前无 MDC 过滤器，恒 null 被省略，前端不依赖其回显（契约 4.3） */
+  /** 后端由 RequestIdFilter 回填；缺省时不参与业务判断（契约 4.3） */
   requestId?: string
   /** yyyy-MM-dd HH:mm:ss（Jackson date-format + Asia/Shanghai），原样直显（契约 3.3） */
   timestamp?: string

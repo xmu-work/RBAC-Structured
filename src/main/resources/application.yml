@@ -78,6 +78,11 @@ open-api:
   # nonce 防重放缓存有效期（秒）
   nonce-ttl: 300
 
+# 幂等
+idempotency:
+  ttl: 600          # Idempotency-Key 结果缓存有效期（秒）
+  max-body-bytes: 1048576  # 幂等请求体指纹上限，防止超大请求占用内存
+
 # 审计日志配置
 audit:
   # 日志永久保存，不自动删除
@@ -100,4 +105,4 @@ logging:
     com.iam.platform: INFO
     org.hibernate.SQL: WARN
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [requestId=%X{requestId:-}] %logger{36} - %msg%n"

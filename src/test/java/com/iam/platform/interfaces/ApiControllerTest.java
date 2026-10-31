@@ -9,6 +9,7 @@ import com.iam.platform.application.decision.DecisionService;
 import com.iam.platform.application.decision.DecisionResult;
 import com.iam.platform.application.decision.PermissionCheckResult;
 import com.iam.platform.application.grant.GrantService;
+import com.iam.platform.application.idempotency.IdempotencyStore;
 import com.iam.platform.application.organization.OrganizationService;
 import com.iam.platform.application.openapi.OpenApiAuthenticator;
 import com.iam.platform.application.permission.DataPermissionService;
@@ -17,8 +18,10 @@ import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.persistence.entity.*;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
@@ -33,6 +36,7 @@ import java.util.Set;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,6 +72,8 @@ class ApiControllerTest {
     private AuditService auditService;
     @MockitoBean
     private OpenApiAuthenticator openApiAuthenticator;
+    @MockitoBean
+    private IdempotencyStore idempotencyStore;
 
     @BeforeEach
     void setUp() {
@@ -210,6 +216,88 @@ class ApiControllerTest {
                         .content("{\"username\":\"\",\"password\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_INVALID.getCode()));
+    }
+
+    @Test
+    void responseEchoesRequestId() throws Exception {
+        when(roleService.listRoles()).thenReturn(List.of());
+
+        mvc.perform(get("/roles").header("Authorization", AUTH).header("X-Request-Id", "req-abc"))
+                .andExpect(header().string("X-Request-Id", "req-abc"))
+                .andExpect(jsonPath("$.requestId").value("req-abc"));
+    }
+
+    @Test
+    void idempotencyFingerprintIncludesRequestBody() throws Exception {
+        LoginResponse response = new LoginResponse();
+        response.setAccessToken("first");
+        when(authService.login(any())).thenReturn(response);
+        when(idempotencyStore.acquire(eq("body-key"), anyString(), anyLong()))
+                .thenReturn(IdempotencyStore.Status.ACQUIRED, IdempotencyStore.Status.CONFLICT);
+
+        mvc.perform(post("/auth/login").header("Idempotency-Key", "body-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"first-password\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/auth/login").header("Idempotency-Key", "body-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"second-password\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.IDEMPOTENCY_CONFLICT.getCode()));
+
+        ArgumentCaptor<String> fingerprints = ArgumentCaptor.forClass(String.class);
+        verify(idempotencyStore, times(2)).acquire(eq("body-key"), fingerprints.capture(), anyLong());
+        Assertions.assertNotEquals(fingerprints.getAllValues().get(0), fingerprints.getAllValues().get(1));
+    }
+
+    @Test
+    void unsafeIdempotencyKeyIsRejectedBeforeExecution() throws Exception {
+        mvc.perform(post("/auth/login").header("Idempotency-Key", "bad key with spaces")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"password\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_INVALID.getCode()));
+
+        verifyNoInteractions(idempotencyStore);
+        verify(authService, never()).login(any());
+    }
+
+    @Test
+    void idempotencyFingerprintIncludesCaller() throws Exception {
+        when(authService.authenticate("second-token")).thenReturn(2L);
+        when(idempotencyStore.acquire(eq("caller-key"), anyString(), anyLong()))
+                .thenReturn(IdempotencyStore.Status.ACQUIRED, IdempotencyStore.Status.CONFLICT);
+
+        mvc.perform(post("/roles/grants").header("Authorization", AUTH).header("Idempotency-Key", "caller-key")
+                        .param("userId", "5").param("roleId", "2"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/roles/grants").header("Authorization", "Bearer second-token")
+                        .header("Idempotency-Key", "caller-key")
+                        .param("userId", "5").param("roleId", "2"))
+                .andExpect(status().isConflict());
+
+        ArgumentCaptor<String> fingerprints = ArgumentCaptor.forClass(String.class);
+        verify(idempotencyStore, times(2)).acquire(eq("caller-key"), fingerprints.capture(), anyLong());
+        Assertions.assertNotEquals(fingerprints.getAllValues().get(0), fingerprints.getAllValues().get(1));
+    }
+
+    @Test
+    void completedRequestReplaysResponseWithCurrentRequestId() throws Exception {
+        when(idempotencyStore.acquire(eq("complete-key"), anyString(), anyLong()))
+                .thenReturn(IdempotencyStore.Status.COMPLETED);
+        when(idempotencyStore.getResponse("complete-key")).thenReturn(
+                "200\n{\"code\":0,\"message\":\"success\",\"data\":{\"accessToken\":\"cached\"},"
+                        + "\"requestId\":\"original-request\"}");
+
+        mvc.perform(post("/auth/login").header("Idempotency-Key", "complete-key")
+                        .header("X-Request-Id", "current-request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"password\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Request-Id", "current-request"))
+                .andExpect(jsonPath("$.data.accessToken").value("cached"))
+                .andExpect(jsonPath("$.requestId").value("current-request"));
+        verify(authService, never()).login(any());
     }
 
     @Test
