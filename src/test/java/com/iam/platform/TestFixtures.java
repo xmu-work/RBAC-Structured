@@ -17,6 +17,7 @@ public final class TestFixtures {
     public static CryptoComponent crypto() {
         CryptoComponent crypto = new CryptoComponent();
         ReflectionTestUtils.setField(crypto, "aesKey", "test-aes-key");
+        ReflectionTestUtils.setField(crypto, "hmacKey", "test-hmac-key");
         return crypto;
     }
 
