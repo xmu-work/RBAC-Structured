@@ -9,6 +9,7 @@ import com.iam.platform.application.decision.DecisionService;
 import com.iam.platform.application.decision.PermissionCheckResult;
 import com.iam.platform.application.grant.GrantService;
 import com.iam.platform.application.organization.OrganizationService;
+import com.iam.platform.application.openapi.OpenApiAuthenticator;
 import com.iam.platform.application.permission.DataPermissionService;
 import com.iam.platform.application.permission.FunctionPermissionService;
 import com.iam.platform.application.role.RoleService;
@@ -64,6 +65,8 @@ class ApiControllerTest {
     private OrganizationService organizationService;
     @MockitoBean
     private AuditService auditService;
+    @MockitoBean
+    private OpenApiAuthenticator openApiAuthenticator;
 
     @BeforeEach
     void setUp() {
@@ -298,5 +301,27 @@ class ApiControllerTest {
                 .andExpect(jsonPath("$.data.results.100").value(true));
         mvc.perform(get("/open/permissions").header("Authorization", AUTH).param("userId", "1").param("systemCode", "ADMIN"))
                 .andExpect(jsonPath("$.data[0]").value(100));
+    }
+
+    @Test
+    void openApiUserTokenCannotQueryOthers() throws Exception {
+        // 普通用户令牌只能查本人，查他人需接入方签名
+        mvc.perform(get("/open/permissions").header("Authorization", AUTH)
+                        .param("userId", "2").param("systemCode", "ADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NO_FUNCTION_PERM.getCode()));
+    }
+
+    @Test
+    void openApiAppSignatureAllowsQueryingOthers() throws Exception {
+        when(decisionService.getUserFunctionPoints(2L, "ADMIN")).thenReturn(Set.of(100L));
+
+        mvc.perform(get("/open/permissions")
+                        .header("X-App-Id", "OA").header("X-Timestamp", "1")
+                        .header("X-Nonce", "n").header("X-Signature", "s")
+                        .param("userId", "2").param("systemCode", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0]").value(100));
+        verify(openApiAuthenticator).verify("OA", "1", "n", "s");
     }
 }

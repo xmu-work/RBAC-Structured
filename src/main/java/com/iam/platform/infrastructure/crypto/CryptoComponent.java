@@ -117,12 +117,19 @@ public class CryptoComponent {
      * 真正的 HMAC-SHA256（使用独立的 crypto.hmac-key），用于等值检索。
      */
     public String hash(String value) {
+        return hmacHex(hmacKey, value);
+    }
+
+    /**
+     * 以指定密钥计算 HMAC-SHA256（十六进制小写），供开放 API 接入方签名校验使用。
+     */
+    public String hmacHex(String secret, String value) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(new SecretKeySpec(hmacKey.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
             return toHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
-            throw new IllegalStateException("哈希计算失败", e);
+            throw new IllegalStateException("HMAC 计算失败", e);
         }
     }
 

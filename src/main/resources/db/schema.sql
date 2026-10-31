@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS iam_system (
     system_name  VARCHAR(128) NOT NULL COMMENT '子系统名称',
     callback_url VARCHAR(500) NULL,
     public_key   TEXT         NULL,
+    app_secret   VARCHAR(128) NULL     COMMENT '接入方签名密钥（HMAC）',
     status       VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
     description  VARCHAR(500) NULL,
     is_deleted   TINYINT      NOT NULL DEFAULT 0,
