@@ -3,10 +3,12 @@ package com.iam.platform.infrastructure.cache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
+import java.util.Collections;
+import java.util.UUID;
 
 /**
  * 权限缓存与分布式锁组件（M10 基础设施）。
@@ -19,10 +21,17 @@ import java.util.concurrent.TimeUnit;
  * <p>缓存失效策略：采用“不可变快照 + 版本号”而非扫描删除。快照 key 内嵌权限版本号，
  * 授权变更时只递增版本号即可让旧快照不可达，随后由 TTL 自然淘汰，
  * 避免在生产环境使用 {@code KEYS} 通配扫描阻塞 Redis。
+ *
+ * <p>分布式锁：锁值保存随机 owner token，释放时用 Lua 原子比较并删除，
+ * 避免“锁因超时过期、他人获取后被原持有者误删”的问题。
  */
 @Slf4j
 @Component
 public class PermissionCacheComponent {
+
+    /** 解锁脚本：仅当锁值等于持有者 token 时才删除，保证原子性。 */
+    private static final String UNLOCK_LUA =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
     private final StringRedisTemplate redisTemplate;
 
@@ -77,22 +86,31 @@ public class PermissionCacheComponent {
     /**
      * 尝试获取分布式锁。
      *
-     * @param lockKey  锁键（如 auth:{userId}）
-     * @param timeout  超时秒数
-     * @return 是否获取成功
+     * @param lockKey       锁键（如 auth:{userId}）
+     * @param timeoutSeconds 锁超时秒数
+     * @return 获取成功返回 owner token（释放时须回传），失败返回 null
      */
-    public boolean tryLock(String lockKey, long timeout) {
+    public String tryLock(String lockKey, long timeoutSeconds) {
         String key = lockPrefix + ":" + lockKey;
-        Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, "1", timeout, TimeUnit.SECONDS);
-        return Boolean.TRUE.equals(ok);
+        String ownerToken = UUID.randomUUID().toString();
+        Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, ownerToken, Duration.ofSeconds(timeoutSeconds));
+        return Boolean.TRUE.equals(ok) ? ownerToken : null;
     }
 
     /**
-     * 释放分布式锁。
+     * 释放分布式锁（Lua 原子比较并删除，只释放自己持有的锁）。
+     *
+     * @param ownerToken {@link #tryLock} 返回的持有者 token
+     * @return 是否成功释放
      */
-    public void unlock(String lockKey) {
+    public boolean unlock(String lockKey, String ownerToken) {
+        if (ownerToken == null) {
+            return false;
+        }
         String key = lockPrefix + ":" + lockKey;
-        redisTemplate.delete(key);
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>(UNLOCK_LUA, Long.class);
+        Long result = redisTemplate.execute(script, Collections.singletonList(key), ownerToken);
+        return result != null && result > 0;
     }
 
     private String versionKey() {
