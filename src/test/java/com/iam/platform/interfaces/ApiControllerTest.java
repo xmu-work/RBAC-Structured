@@ -200,7 +200,7 @@ class ApiControllerTest {
     @Test
     void grantingAbnormalUserIsConflictNotForbidden() throws Exception {
         // 目标用户状态异常不能返回 2005/2006（403），否则前端会把操作人强制登出
-        when(grantService.grantRole(eq(5L), eq(2L), isNull(), isNull(), isNull()))
+        when(grantService.grantRole(eq(5L), eq(2L), isNull(), eq(1L), isNull()))
                 .thenThrow(new BusinessException(ErrorCode.TARGET_USER_ABNORMAL));
 
         mvc.perform(post("/roles/grants").header("Authorization", AUTH).param("userId", "5").param("roleId", "2"))
@@ -214,7 +214,7 @@ class ApiControllerTest {
     void roleAndGrantEndpoints() throws Exception {
         when(roleService.createRole("HR", "人事", "FUNC", null)).thenReturn(new IamRole());
         when(roleService.getRole(2L)).thenReturn(new IamRole());
-        when(grantService.grantRole(eq(1L), eq(2L), isNull(), isNull(), isNull())).thenReturn(new IamUserRole());
+        when(grantService.grantRole(eq(1L), eq(2L), isNull(), eq(1L), isNull())).thenReturn(new IamUserRole());
         when(grantService.getUserRoles(1L)).thenReturn(List.of(new IamUserRole()));
 
         mvc.perform(post("/roles").header("Authorization", AUTH)
@@ -258,7 +258,7 @@ class ApiControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/systems/role-functions/2").header("Authorization", AUTH))
                 .andExpect(jsonPath("$.data.length()").value(1));
-        verify(functionPermissionService).bindRoleFunctions(2L, List.of(10L, 11L), "VIEW", null);
+        verify(functionPermissionService).bindRoleFunctions(2L, List.of(10L, 11L), "VIEW", 1L);
         verify(functionPermissionService).unbindRoleFunctions(2L, List.of(10L));
     }
 

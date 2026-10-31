@@ -1,6 +1,7 @@
 package com.iam.platform.interfaces.admin;
 
 import com.iam.platform.application.audit.AuditService;
+import com.iam.platform.common.result.PageResult;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamAuditLog;
 import lombok.RequiredArgsConstructor;
@@ -29,12 +30,14 @@ public class AuditController {
      * 分页查询审计日志。
      */
     @GetMapping
-    public Result<Page<IamAuditLog>> list(@RequestParam(defaultValue = "1") int page,
-                                          @RequestParam(defaultValue = "20") int size,
-                                          @RequestParam(required = false) Long userId,
-                                          @RequestParam(required = false) String systemCode,
-                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        throw new UnsupportedOperationException("待实现");
+    public Result<PageResult<IamAuditLog>> list(@RequestParam(defaultValue = "1") int page,
+                                                @RequestParam(defaultValue = "20") int size,
+                                                @RequestParam(required = false) Long userId,
+                                                @RequestParam(required = false) String systemCode,
+                                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+                                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
+        Page<IamAuditLog> result = auditService.queryLogs(
+                PageRequest.of(Math.max(page, 1) - 1, size), userId, systemCode, startTime, endTime);
+        return Result.success(PageResult.of(result.getTotalElements(), page, size, result.getContent()));
     }
 }

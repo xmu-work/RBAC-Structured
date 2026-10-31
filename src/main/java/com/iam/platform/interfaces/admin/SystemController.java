@@ -8,6 +8,7 @@ import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
 import com.iam.platform.infrastructure.persistence.entity.IamModule;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
 import com.iam.platform.infrastructure.persistence.entity.IamSystem;
+import com.iam.platform.interfaces.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -78,7 +79,7 @@ public class SystemController {
     public Result<Void> bindRoleFunctions(@RequestParam Long roleId,
                                           @RequestBody List<Long> functionPointIds,
                                           @RequestParam String allowedAction,
-                                          @RequestParam(required = false) Long createdBy) {
+                                          @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long createdBy) {
         functionPermissionService.bindRoleFunctions(roleId, functionPointIds, allowedAction, createdBy);
         return Result.success();
     }
@@ -128,7 +129,7 @@ public class SystemController {
                                           @RequestParam String scopeType,
                                           @RequestParam(required = false) Long orgId,
                                           @RequestParam(required = false) Long projectId,
-                                          @RequestParam(required = false) Long createdBy) {
+                                          @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long createdBy) {
         dataPermissionService.bindRoleDataScope(roleId, scopeType, orgId, projectId, createdBy);
         return Result.success();
     }

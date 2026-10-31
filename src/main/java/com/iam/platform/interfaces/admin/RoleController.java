@@ -6,6 +6,7 @@ import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
+import com.iam.platform.interfaces.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -80,7 +81,7 @@ public class RoleController {
     public Result<IamUserRole> grant(@RequestParam Long userId,
                                      @RequestParam Long roleId,
                                      @RequestParam(required = false) LocalDateTime expireTime,
-                                     @RequestParam(required = false) Long grantBy,
+                                     @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long grantBy,
                                      @RequestParam(required = false) String grantReason) {
         return Result.success(grantService.grantRole(userId, roleId, expireTime, grantBy, grantReason));
     }

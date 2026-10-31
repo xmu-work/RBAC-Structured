@@ -57,7 +57,8 @@ INSERT INTO iam_function_point (id, module_id, point_code, point_name, action, a
 (20024, 2, 'DATA_SCOPE_LIST',    '查询数据范围',     'VIEW', '/systems/data-scopes',        'GET',    'ACTIVE', 0),
 (20025, 2, 'ROLE_SCOPE_BIND',    '绑定角色数据范围', 'ALL',  '/systems/role-data-scopes',   'POST',   'ACTIVE', 0),
 (20026, 2, 'ROLE_EXCL_ADD',      '配置角色互斥',     'ALL',  '/roles/{roleId}/exclusions',  'POST',   'ACTIVE', 0),
-(20027, 2, 'ROLE_EXCL_LIST',     '查询角色互斥',     'VIEW', '/roles/{roleId}/exclusions',  'GET',    'ACTIVE', 0);
+(20027, 2, 'ROLE_EXCL_LIST',     '查询角色互斥',     'VIEW', '/roles/{roleId}/exclusions',  'GET',    'ACTIVE', 0),
+(20028, 2, 'AUDIT_LIST',         '查询审计日志',     'VIEW', '/audit-logs',                 'GET',    'ACTIVE', 0);
 
 -- 4. 超级管理员角色，拥有以上全部功能点
 INSERT INTO iam_role (id, role_code, role_name, role_type, status, description, is_deleted)
