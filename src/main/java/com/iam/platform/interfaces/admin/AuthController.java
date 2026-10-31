@@ -5,6 +5,7 @@ import com.iam.platform.application.auth.LoginRequest;
 import com.iam.platform.application.auth.LoginResponse;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.interfaces.AuthInterceptor;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +27,7 @@ public class AuthController {
      * 账号密码登录。
      */
     @PostMapping("/login")
-    public Result<LoginResponse> login(@RequestBody LoginRequest request) {
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return Result.success(authService.login(request));
     }
 

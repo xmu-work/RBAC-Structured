@@ -3,8 +3,14 @@ package com.iam.platform.interfaces.admin;
 import com.iam.platform.application.organization.OrganizationService;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamOrg;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +21,7 @@ import java.util.List;
  * <p>对应 API：/api/v1/orgs/*
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/orgs")
 @RequiredArgsConstructor
@@ -26,10 +33,10 @@ public class OrgController {
      * 新建组织节点。
      */
     @PostMapping
-    public Result<IamOrg> create(@RequestParam String orgCode,
-                                 @RequestParam String orgName,
-                                 @RequestParam String orgType,
-                                 @RequestParam Integer orgLevel,
+    public Result<IamOrg> create(@RequestParam @NotBlank @Size(max = 64) String orgCode,
+                                 @RequestParam @NotBlank @Size(max = 128) String orgName,
+                                 @RequestParam @NotBlank String orgType,
+                                 @RequestParam @NotNull @Min(1) @Max(4) Integer orgLevel,
                                  @RequestParam(required = false) Long parentId,
                                  @RequestParam(required = false) Integer sortNo) {
         return Result.success(organizationService.createOrg(orgCode, orgName, orgType, orgLevel, parentId, sortNo));
@@ -63,7 +70,7 @@ public class OrgController {
      * 移动组织节点。
      */
     @PutMapping("/{orgId}/move")
-    public Result<IamOrg> move(@PathVariable Long orgId, @RequestParam Long newParentId) {
+    public Result<IamOrg> move(@PathVariable Long orgId, @RequestParam @NotNull Long newParentId) {
         return Result.success(organizationService.moveOrg(orgId, newParentId));
     }
 }

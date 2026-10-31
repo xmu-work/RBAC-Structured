@@ -198,6 +198,21 @@ class ApiControllerTest {
     }
 
     @Test
+    void oversizedPageSizeIsRejected() throws Exception {
+        mvc.perform(get("/users").header("Authorization", AUTH).param("page", "1").param("size", "1000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_INVALID.getCode()));
+    }
+
+    @Test
+    void loginBlankCredentialsAreRejected() throws Exception {
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"\",\"password\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_INVALID.getCode()));
+    }
+
+    @Test
     void grantingAbnormalUserIsConflictNotForbidden() throws Exception {
         // 目标用户状态异常不能返回 2005/2006（403），否则前端会把操作人强制登出
         when(grantService.grantRole(eq(5L), eq(2L), isNull(), eq(1L), isNull()))

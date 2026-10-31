@@ -33,6 +33,9 @@ public class FunctionPermissionService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
 
+    /** 单次批量绑定功能点数量上限，防止超大请求耗尽资源 */
+    private static final int MAX_BATCH_FUNCTION_POINTS = 200;
+
     private final IamSystemRepository systemRepository;
     private final IamModuleRepository moduleRepository;
     private final IamFunctionPointRepository functionPointRepository;
@@ -124,6 +127,13 @@ public class FunctionPermissionService {
      */
     @Transactional
     public void bindRoleFunctions(Long roleId, List<Long> functionPointIds, String allowedAction, Long createdBy) {
+        if (functionPointIds == null || functionPointIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "绑定功能点列表不能为空");
+        }
+        if (functionPointIds.size() > MAX_BATCH_FUNCTION_POINTS) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "单次绑定功能点数量不能超过 " + MAX_BATCH_FUNCTION_POINTS);
+        }
         roleRepository.findById(roleId)
                 .filter(r -> r.getIsDeleted() == 0 && RoleService.ROLE_ACTIVE.equals(r.getStatus()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "角色不存在或已停用: " + roleId));

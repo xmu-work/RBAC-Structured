@@ -5,6 +5,8 @@ import com.iam.platform.application.decision.DecisionService;
 import com.iam.platform.application.decision.DataScopeView;
 import com.iam.platform.application.decision.PermissionCheckResult;
 import com.iam.platform.application.decision.ResourceContext;
+import com.iam.platform.common.enums.ErrorCode;
+import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.common.result.Result;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
@@ -28,6 +30,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class OpenApiController {
 
+    /** 单次批量鉴权功能点数量上限 */
+    private static final int MAX_BATCH_FUNCTION_POINTS = 200;
+
     private final DecisionService decisionService;
 
     /**
@@ -49,6 +54,9 @@ public class OpenApiController {
     public Result<PermissionCheckResult> authorizeBatch(HttpServletRequest request,
                                                         @RequestBody BatchCheckRequest body) {
         OpenApiAuth.requireUserScope(request, body.getUserId());
+        if (body.getFunctionPointIds() != null && body.getFunctionPointIds().size() > MAX_BATCH_FUNCTION_POINTS) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "批量功能点数量超过上限 " + MAX_BATCH_FUNCTION_POINTS);
+        }
         return Result.success(decisionService.checkPermissions(
                 body.getUserId(), body.getSystemCode(), body.getFunctionPointIds()));
     }
