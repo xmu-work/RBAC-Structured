@@ -6,8 +6,13 @@ import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
+import com.iam.platform.interfaces.AuthInterceptor;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -19,6 +24,7 @@ import java.util.List;
  * <p>对应 API：/api/v1/roles/*、/api/v1/grants/*
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/roles")
 @RequiredArgsConstructor
@@ -31,10 +37,10 @@ public class RoleController {
      * 新建角色。
      */
     @PostMapping
-    public Result<IamRole> create(@RequestParam String roleCode,
-                                  @RequestParam String roleName,
-                                  @RequestParam String roleType,
-                                  @RequestParam(required = false) String description) {
+    public Result<IamRole> create(@RequestParam @NotBlank @Size(max = 64) String roleCode,
+                                  @RequestParam @NotBlank @Size(max = 128) String roleName,
+                                  @RequestParam @NotBlank String roleType,
+                                  @RequestParam(required = false) @Size(max = 500) String description) {
         return Result.success(roleService.createRole(roleCode, roleName, roleType, description));
     }
 
@@ -59,9 +65,10 @@ public class RoleController {
      */
     @PostMapping("/{roleId}/exclusions")
     public Result<Void> addExclusion(@PathVariable Long roleId,
-                                     @RequestParam Long excludedRoleId,
-                                     @RequestParam(required = false) String reason) {
-        throw new UnsupportedOperationException("待实现");
+                                     @RequestParam @NotNull Long excludedRoleId,
+                                     @RequestParam(required = false) @Size(max = 255) String reason) {
+        roleService.addRoleExclusion(roleId, excludedRoleId, reason);
+        return Result.success();
     }
 
     /**
@@ -69,7 +76,7 @@ public class RoleController {
      */
     @GetMapping("/{roleId}/exclusions")
     public Result<List<IamRoleExclusion>> exclusions(@PathVariable Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        return Result.success(roleService.getExclusions(roleId));
     }
 
     /**
@@ -79,8 +86,8 @@ public class RoleController {
     public Result<IamUserRole> grant(@RequestParam Long userId,
                                      @RequestParam Long roleId,
                                      @RequestParam(required = false) LocalDateTime expireTime,
-                                     @RequestParam(required = false) Long grantBy,
-                                     @RequestParam(required = false) String grantReason) {
+                                     @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long grantBy,
+                                     @RequestParam(required = false) @Size(max = 255) String grantReason) {
         return Result.success(grantService.grantRole(userId, roleId, expireTime, grantBy, grantReason));
     }
 

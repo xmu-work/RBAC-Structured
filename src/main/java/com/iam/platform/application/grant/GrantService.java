@@ -1,12 +1,16 @@
 package com.iam.platform.application.grant;
 
+import com.iam.platform.application.auth.AuthService;
+import com.iam.platform.application.decision.DecisionService;
 import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
+import com.iam.platform.infrastructure.persistence.entity.IamRoleFunction;
 import com.iam.platform.infrastructure.persistence.entity.IamUser;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
+import com.iam.platform.infrastructure.persistence.repository.IamRoleFunctionRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamUserRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamUserRoleRepository;
@@ -16,7 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 授权管理应用服务（M07）。
@@ -36,6 +44,9 @@ public class GrantService {
     private final IamUserRoleRepository userRoleRepository;
     private final IamUserRepository userRepository;
     private final IamRoleRepository roleRepository;
+    private final IamRoleFunctionRepository roleFunctionRepository;
+    private final RoleService roleService;
+    private final DecisionService decisionService;
 
     /**
      * 为用户授予角色。
@@ -70,6 +81,8 @@ public class GrantService {
         if (grant != null && GRANT_ACTIVE.equals(grant.getStatus())) {
             throw new BusinessException(ErrorCode.GRANT_DUPLICATE);
         }
+        checkRoleMutex(userId, roleId);
+        checkGrantBoundary(grantBy, roleId);
         if (grant == null) {
             grant = new IamUserRole();
             grant.setUserId(userId);
@@ -127,5 +140,67 @@ public class GrantService {
         grant.setStatus(GRANT_REVOKED);
         grant.setUpdatedAt(LocalDateTime.now());
         userRoleRepository.save(grant);
+    }
+
+    /**
+     * 校验角色互斥：本次授予后，用户角色集合中不得出现互斥对（FR-14）。
+     */
+    private void checkRoleMutex(Long userId, Long roleId) {
+        List<Long> candidate = userRoleRepository.findByUserIdAndStatus(userId, GRANT_ACTIVE).stream()
+                .map(IamUserRole::getRoleId)
+                .collect(Collectors.toCollection(ArrayList::new));
+        candidate.add(roleId);
+        long[] conflict = roleService.checkMutex(candidate);
+        if (conflict != null) {
+            throw new BusinessException(ErrorCode.ROLE_MUTEX_CONFLICT,
+                    "角色互斥冲突: " + conflict[0] + " 与 " + conflict[1]);
+        }
+    }
+
+    /**
+     * 管理员授权边界（防提权）：只能授予“功能点集合不超出自身权限”的角色。
+     *
+     * <p>操作人为空（系统/种子初始化）时跳过。角色的功能点包含其父角色（继承）的功能点，
+     * 因此“把继承自高权限父角色的角色授予他人”同样被拦截。
+     */
+    private void checkGrantBoundary(Long operatorId, Long roleId) {
+        if (operatorId == null) {
+            return;
+        }
+        Set<Long> rolePoints = collectRoleFunctionPointIds(roleId);
+        if (rolePoints.isEmpty()) {
+            return;
+        }
+        Set<Long> operatorPoints = decisionService.getUserFunctionPoints(operatorId, AuthService.ADMIN_SYSTEM_CODE);
+        if (!operatorPoints.containsAll(rolePoints)) {
+            throw new BusinessException(ErrorCode.NO_FUNCTION_PERM, "不能授予超出自身权限的角色: " + roleId);
+        }
+    }
+
+    /** 角色及其父角色（继承）声明的功能点集合。 */
+    private Set<Long> collectRoleFunctionPointIds(Long roleId) {
+        Set<Long> roleIds = new HashSet<>();
+        Set<Long> toVisit = new HashSet<>();
+        toVisit.add(roleId);
+        while (!toVisit.isEmpty()) {
+            Set<Long> next = new HashSet<>();
+            for (IamRole role : roleRepository.findAllById(toVisit)) {
+                if (role.getIsDeleted() != 0 || !RoleService.ROLE_ACTIVE.equals(role.getStatus())) {
+                    continue;
+                }
+                if (!roleIds.add(role.getId())) {
+                    continue;
+                }
+                if (role.getParentId() != null) {
+                    next.add(role.getParentId());
+                }
+            }
+            toVisit = next;
+        }
+        Set<Long> points = new HashSet<>();
+        for (Long id : roleIds) {
+            roleFunctionRepository.findByRoleId(id).forEach(rf -> points.add(rf.getFunctionPointId()));
+        }
+        return points;
     }
 }

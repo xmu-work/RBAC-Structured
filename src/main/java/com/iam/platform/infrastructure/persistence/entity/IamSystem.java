@@ -32,6 +32,11 @@ public class IamSystem {
     @Column(name = "public_key", columnDefinition = "text")
     private String publicKey;
 
+    /** 接入方签名密钥（HMAC），仅写入不序列化回显，避免泄露 */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    @Column(name = "app_secret", length = 128)
+    private String appSecret;
+
     @Column(name = "status", nullable = false, length = 16)
     private String status;
 
@@ -46,4 +51,9 @@ public class IamSystem {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /** 乐观锁版本号 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

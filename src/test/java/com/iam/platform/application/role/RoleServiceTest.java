@@ -4,6 +4,8 @@ import com.iam.platform.TestFixtures;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
+import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
+import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleExclusionRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
 import org.junit.jupiter.api.Test;
@@ -71,5 +73,16 @@ class RoleServiceTest {
 
         assertThat(roleService.getRole(1L)).isSameAs(active);
         assertThat(roleService.listRoles()).containsExactly(active);
+    }
+
+    @Test
+    void checkMutexDetectsConflictingPair() {
+        IamRoleExclusion exclusion = new IamRoleExclusion();
+        exclusion.setRoleId(1L);
+        exclusion.setExcludedRoleId(2L);
+        when(exclusionRepository.findByRoleId(1L)).thenReturn(List.of(exclusion));
+
+        assertThat(roleService.checkMutex(List.of(1L, 2L))).containsExactly(1L, 2L);
+        assertThat(roleService.checkMutex(List.of(1L))).isNull();
     }
 }

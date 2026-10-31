@@ -5,10 +5,16 @@ import com.iam.platform.application.account.UserView;
 import com.iam.platform.common.result.PageResult;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamUser;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -17,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
  * <p>对应 API：/api/v1/users/*
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -28,12 +35,12 @@ public class UserController {
      * 创建用户。
      */
     @PostMapping
-    public Result<UserView> create(@RequestParam String userNo,
-                                   @RequestParam(required = false) String password,
-                                   @RequestParam String realName,
-                                   @RequestParam(required = false) String phone,
-                                   @RequestParam Long orgId,
-                                   @RequestParam(required = false) String post) {
+    public Result<UserView> create(@RequestParam @NotBlank @Size(max = 32) String userNo,
+                                   @RequestParam(required = false) @Size(max = 64) String password,
+                                   @RequestParam @NotBlank @Size(max = 64) String realName,
+                                   @RequestParam(required = false) @Size(max = 20) String phone,
+                                   @RequestParam @NotNull Long orgId,
+                                   @RequestParam(required = false) @Size(max = 64) String post) {
         return Result.success(accountService.toView(
                 accountService.createUser(userNo, password, realName, phone, orgId, post)));
     }
@@ -50,11 +57,11 @@ public class UserController {
      * 分页查询用户列表。
      */
     @GetMapping
-    public Result<PageResult<UserView>> list(@RequestParam(defaultValue = "1") int page,
-                                             @RequestParam(defaultValue = "20") int size,
+    public Result<PageResult<UserView>> list(@RequestParam(defaultValue = "1") @Min(1) int page,
+                                             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
                                              @RequestParam(required = false) Long orgId,
-                                             @RequestParam(required = false) String accountStatus) {
-        Page<IamUser> result = accountService.listUsers(PageRequest.of(Math.max(page, 1) - 1, size), orgId, accountStatus);
+                                             @RequestParam(required = false) @Size(max = 16) String accountStatus) {
+        Page<IamUser> result = accountService.listUsers(PageRequest.of(page - 1, size), orgId, accountStatus);
         return Result.success(PageResult.of(result.getTotalElements(), page, size,
                 result.getContent().stream().map(accountService::toView).toList()));
     }
@@ -64,8 +71,8 @@ public class UserController {
      */
     @PutMapping("/{userId}/status")
     public Result<UserView> changeStatus(@PathVariable Long userId,
-                                         @RequestParam String targetStatus,
-                                         @RequestParam(required = false) String reason) {
+                                         @RequestParam @NotBlank String targetStatus,
+                                         @RequestParam(required = false) @Size(max = 255) String reason) {
         return Result.success(accountService.toView(accountService.changeStatus(userId, targetStatus, reason)));
     }
 }

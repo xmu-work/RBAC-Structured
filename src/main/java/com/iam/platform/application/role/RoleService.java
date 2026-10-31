@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 角色管理应用服务（M04）。
@@ -71,22 +73,26 @@ public class RoleService {
     }
 
     /**
-     * 配置角色互斥。
+     * 配置角色互斥（双向落库）。
      *
      * <p>互斥角色不能同时授予同一用户（如会计与出纳）。
-     * 属于 RBAC2 约束，留待 RBAC3 阶段实现。
      * 对应 FR-14、UC-05。
      */
     @Transactional
     public void addRoleExclusion(Long roleIdA, Long roleIdB, String reason) {
-        throw new UnsupportedOperationException("待实现");
+        if (roleIdA == null || roleIdB == null || roleIdA.equals(roleIdB)) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "互斥角色不能为空且不能是自身");
+        }
+        getRole(roleIdA);
+        getRole(roleIdB);
+        saveExclusion(roleIdA, roleIdB, reason);
     }
 
     /**
      * 查询角色的互斥角色列表。
      */
     public List<IamRoleExclusion> getExclusions(Long roleId) {
-        throw new UnsupportedOperationException("待实现");
+        return exclusionRepository.findByRoleId(roleId);
     }
 
     /**
@@ -96,10 +102,35 @@ public class RoleService {
      * @return 冲突的角色对，无冲突返回 null
      */
     public long[] checkMutex(List<Long> roleIds) {
-        throw new UnsupportedOperationException("待实现");
+        if (roleIds == null || roleIds.size() < 2) {
+            return null;
+        }
+        Set<Long> ids = new HashSet<>(roleIds);
+        for (Long roleId : ids) {
+            for (IamRoleExclusion exclusion : exclusionRepository.findByRoleId(roleId)) {
+                if (ids.contains(exclusion.getExcludedRoleId())) {
+                    return new long[]{roleId, exclusion.getExcludedRoleId()};
+                }
+            }
+        }
+        return null;
     }
 
     private void saveExclusion(Long roleIdA, Long roleIdB, String reason) {
-        throw new UnsupportedOperationException("待实现");
+        LocalDateTime now = LocalDateTime.now();
+        saveOneExclusion(roleIdA, roleIdB, reason, now);
+        saveOneExclusion(roleIdB, roleIdA, reason, now);
+    }
+
+    private void saveOneExclusion(Long roleId, Long excludedRoleId, String reason, LocalDateTime now) {
+        if (exclusionRepository.findByRoleIdAndExcludedRoleId(roleId, excludedRoleId).isPresent()) {
+            return;
+        }
+        IamRoleExclusion exclusion = new IamRoleExclusion();
+        exclusion.setRoleId(roleId);
+        exclusion.setExcludedRoleId(excludedRoleId);
+        exclusion.setDescription(reason);
+        exclusion.setCreatedAt(now);
+        exclusionRepository.save(exclusion);
     }
 }

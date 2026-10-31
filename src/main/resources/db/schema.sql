@@ -23,12 +23,14 @@ CREATE TABLE IF NOT EXISTS iam_org (
     is_deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '软删除标记',
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    version        BIGINT        NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by     BIGINT        NULL     COMMENT '创建人',
     updated_by     BIGINT        NULL     COMMENT '更新人',
     PRIMARY KEY (id),
     UNIQUE KEY uk_org_code (org_code),
     KEY idx_org_parent (parent_id),
-    KEY idx_org_ancestors (ancestors)
+    KEY idx_org_ancestors (ancestors),
+    CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES iam_org (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构';
 
 -- ----------------------------------------------------------
@@ -50,12 +52,14 @@ CREATE TABLE IF NOT EXISTS iam_user (
     is_deleted     TINYINT      NOT NULL DEFAULT 0,
     created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version        BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by     BIGINT       NULL,
     updated_by     BIGINT       NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_user_no (user_no),
     KEY idx_user_org (org_id),
-    KEY idx_user_status (account_status)
+    KEY idx_user_status (account_status),
+    CONSTRAINT fk_user_org FOREIGN KEY (org_id) REFERENCES iam_org (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户';
 
 -- ----------------------------------------------------------
@@ -72,11 +76,13 @@ CREATE TABLE IF NOT EXISTS iam_role (
     is_deleted  TINYINT      NOT NULL DEFAULT 0,
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version     BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     created_by  BIGINT       NULL,
     updated_by  BIGINT       NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_role_code (role_code),
-    KEY idx_role_parent (parent_id)
+    KEY idx_role_parent (parent_id),
+    CONSTRAINT fk_role_parent FOREIGN KEY (parent_id) REFERENCES iam_role (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色';
 
 -- ----------------------------------------------------------
@@ -90,7 +96,9 @@ CREATE TABLE IF NOT EXISTS iam_role_exclusion (
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     created_by       BIGINT        NULL     COMMENT '创建人',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_role_excl (role_id, excluded_role_id)
+    UNIQUE KEY uk_role_excl (role_id, excluded_role_id),
+    CONSTRAINT fk_excl_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
+    CONSTRAINT fk_excl_excluded FOREIGN KEY (excluded_role_id) REFERENCES iam_role (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色互斥（双向落库）';
 
 -- ----------------------------------------------------------
@@ -107,9 +115,12 @@ CREATE TABLE IF NOT EXISTS iam_user_role (
     status         VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE/EXPIRED/REVOKED',
     created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version        BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (id),
     UNIQUE KEY uk_user_role (user_id, role_id),
-    KEY idx_ur_role (role_id)
+    KEY idx_ur_role (role_id),
+    CONSTRAINT fk_ur_user FOREIGN KEY (user_id) REFERENCES iam_user (id),
+    CONSTRAINT fk_ur_role FOREIGN KEY (role_id) REFERENCES iam_role (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户-角色关联';
 
 -- ----------------------------------------------------------
@@ -121,11 +132,13 @@ CREATE TABLE IF NOT EXISTS iam_system (
     system_name  VARCHAR(128) NOT NULL COMMENT '子系统名称',
     callback_url VARCHAR(500) NULL,
     public_key   TEXT         NULL,
+    app_secret   VARCHAR(128) NULL     COMMENT '接入方签名密钥（HMAC）',
     status       VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
     description  VARCHAR(500) NULL,
     is_deleted   TINYINT      NOT NULL DEFAULT 0,
     created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    version      BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (id),
     UNIQUE KEY uk_system_code (system_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接入子系统';
@@ -144,7 +157,8 @@ CREATE TABLE IF NOT EXISTS iam_module (
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_module_code (system_id, module_code)
+    UNIQUE KEY uk_module_code (system_id, module_code),
+    CONSTRAINT fk_module_system FOREIGN KEY (system_id) REFERENCES iam_system (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模块';
 
 -- ----------------------------------------------------------
@@ -164,7 +178,8 @@ CREATE TABLE IF NOT EXISTS iam_function_point (
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uk_fp_code (module_id, point_code),
-    UNIQUE KEY uk_fp_api (api_path, api_method)
+    UNIQUE KEY uk_fp_api (api_path, api_method),
+    CONSTRAINT fk_fp_module FOREIGN KEY (module_id) REFERENCES iam_module (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='功能点';
 
 -- ----------------------------------------------------------
@@ -179,7 +194,9 @@ CREATE TABLE IF NOT EXISTS iam_role_function (
     created_by        BIGINT      NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_role_fp (role_id, function_point_id),
-    KEY idx_rf_fp (function_point_id)
+    KEY idx_rf_fp (function_point_id),
+    CONSTRAINT fk_rf_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
+    CONSTRAINT fk_rf_fp FOREIGN KEY (function_point_id) REFERENCES iam_function_point (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-功能关联';
 
 -- ----------------------------------------------------------
@@ -211,7 +228,8 @@ CREATE TABLE IF NOT EXISTS iam_role_data_scope (
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     created_by     BIGINT        NULL     COMMENT '授权人',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_role_scope (role_id, scope_type, org_id, project_id)
+    UNIQUE KEY uk_role_scope (role_id, scope_type, org_id, project_id),
+    CONSTRAINT fk_rds_role FOREIGN KEY (role_id) REFERENCES iam_role (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-数据范围授权';
 
 -- ----------------------------------------------------------
@@ -231,7 +249,8 @@ CREATE TABLE IF NOT EXISTS iam_token (
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (token_id),
     UNIQUE KEY uk_token_hash (token_hash),
-    KEY idx_token_user_status (user_id, status)
+    KEY idx_token_user_status (user_id, status),
+    CONSTRAINT fk_token_user FOREIGN KEY (user_id) REFERENCES iam_user (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
 
 -- ----------------------------------------------------------

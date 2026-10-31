@@ -43,7 +43,7 @@ const request = axios.create({
 
 /* ---------------- 请求拦截器（契约 4.3） ---------------- */
 request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  // X-Request-Id：每请求 UUID v4，用于与后端日志关联（[待后端] 回传）
+  // X-Request-Id：每请求 UUID v4，后端回写响应头并写入日志 MDC
   config.headers.set('X-Request-Id', newRequestId())
 
   // Authorization：除 POST /auth/login 外所有请求自动携带 Bearer Token
@@ -53,7 +53,7 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.set('Authorization', `Bearer ${token}`)
   }
 
-  // Idempotency-Key：写请求自动携带（表单会话级 Key 由调用方传入覆盖；[待后端] 幂等拦截）
+  // Idempotency-Key：写请求自动携带；需要跨重试复用时应由调用方传入固定 Key
   const isWrite = (config.method ?? 'get').toUpperCase() !== 'GET'
   if (isWrite && !config.headers.get('Idempotency-Key')) {
     config.headers.set('Idempotency-Key', newIdempotencyKey())

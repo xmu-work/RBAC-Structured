@@ -49,6 +49,11 @@ public class IamRole {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** 乐观锁版本号 */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "created_by")
     private Long createdBy;
 

@@ -66,6 +66,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Result.fail(ErrorCode.PARAM_INVALID, ex.getMessage()));
     }
 
+    /** 乐观锁并发冲突（实体 @Version 校验失败）→ 409/3008，前端提示“数据已被他人修改，请刷新后重试” */
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ResponseEntity<Result<Void>> handleOptimisticLock(org.springframework.dao.OptimisticLockingFailureException ex) {
+        log.warn("并发冲突: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.fail(ErrorCode.LOCK_ACQUIRE_FAILED, "数据已被他人修改，请刷新后重试"));
+    }
+
+    /** 唯一约束/完整性冲突（先查后插竞态）→ 409/3009，不再落到 500 */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Result<Void>> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.warn("数据完整性冲突: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.fail(ErrorCode.RESOURCE_DUPLICATE, "数据已存在或违反唯一约束"));
+    }
+
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<Result<Void>> handleNotFound(Exception ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Result.fail(ErrorCode.RESOURCE_NOT_FOUND));

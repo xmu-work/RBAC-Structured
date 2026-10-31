@@ -7,20 +7,21 @@ spring:
   application:
     name: iam-platform
 
-  # 数据源（Druid）
+  # 数据源（Druid）——生产环境请通过环境变量注入，禁止沿用默认凭据/默认密钥
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/iam_platform?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:iam_platform}?useUnicode=true&characterEncoding=UTF-8&useSSL=${DB_SSL:false}&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     druid:
       initial-size: 5
       min-idle: 5
       max-active: 20
       max-wait: 60000
+      # 监控页默认关闭，避免 /druid/* 对外暴露；如需开启须同时配置访问账号并做网络隔离
       stat-view-servlet:
-        enabled: true
+        enabled: false
 
   # JPA
   jpa:
@@ -35,9 +36,10 @@ spring:
   # Redis
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       database: 0
+      password: ${REDIS_PASSWORD:}
       timeout: 3000ms
       lettuce:
         pool:
@@ -52,20 +54,34 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
-# JWT 配置
+# JWT 配置（生产环境通过 JWT_SECRET 环境变量注入）
 jwt:
-  secret: iam-platform-secret-key-please-change-in-production-2026
+  secret: ${JWT_SECRET:iam-platform-secret-key-please-change-in-production-2026}
   access-token-expire: 7200        # 访问令牌有效期（秒），2小时
   refresh-token-expire: 604800     # 刷新令牌有效期（秒），7天
   issuer: iam-platform
 
-# 加密脱敏配置
+# 加密脱敏配置（生产环境通过环境变量注入）
 crypto:
-  aes-key: iam-aes-256-key-please-change-in-production
+  aes-key: ${AES_KEY:iam-aes-256-key-please-change-in-production}
+  # 检索哈希（HMAC-SHA256）使用独立密钥，不与 AES 加密密钥复用
+  hmac-key: ${HMAC_KEY:iam-hmac-key-please-change-in-production}
   # 姓名脱敏：保留姓氏
   name-mask-rule: KEEP_SURNAME
   # 电话脱敏：中间四位掩码
   phone-mask-rule: MIDDLE_MASK
+
+# 开放 API 接入方签名配置
+open-api:
+  # 允许的客户端时间戳偏差（秒），超出即判为过期
+  timestamp-tolerance: 300
+  # nonce 防重放缓存有效期（秒）
+  nonce-ttl: 300
+
+# 幂等
+idempotency:
+  ttl: 600          # Idempotency-Key 结果缓存有效期（秒）
+  max-body-bytes: 1048576  # 幂等请求体指纹上限，防止超大请求占用内存
 
 # 审计日志配置
 audit:
@@ -89,4 +105,4 @@ logging:
     com.iam.platform: INFO
     org.hibernate.SQL: WARN
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [requestId=%X{requestId:-}] %logger{36} - %msg%n"

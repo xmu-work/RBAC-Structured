@@ -151,6 +151,40 @@ public class AuthService {
         tokenRepository.findByUserIdAndStatus(userId, TOKEN_ACTIVE).forEach(this::revoke);
     }
 
+    /**
+     * 自助修改密码：校验原密码 → 校验新密码强度 → 更新哈希 → 吊销全部旧令牌。
+     *
+     * <p>对应《目前项目的问题》P0-7：项目原先没有改密接口，种子管理员使用固定初始密码。
+     */
+    @Transactional
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        if (oldPassword == null || oldPassword.isBlank() || newPassword == null || newPassword.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_MISSING, "原密码和新密码不能为空");
+        }
+        validatePasswordStrength(newPassword);
+
+        IamUser user = userRepository.findById(userId)
+                .filter(u -> u.getIsDeleted() == 0)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在: " + userId));
+        if (!cryptoComponent.verifyPassword(oldPassword, user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "原密码错误");
+        }
+
+        user.setPasswordHash(cryptoComponent.hashPassword(newPassword));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        revokeUserTokens(userId);
+        log.info("修改密码: userId={}", userId);
+    }
+
+    private void validatePasswordStrength(String password) {
+        boolean strong = password.length() >= 8 && password.length() <= 64
+                && password.matches(".*[A-Za-z].*") && password.matches(".*\\d.*");
+        if (!strong) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "密码需为 8-64 位并同时包含字母和数字");
+        }
+    }
+
     private void validateAccountStatus(String status) {
         if (AccountStatus.SEALED.getCode().equals(status)) {
             throw new BusinessException(ErrorCode.ACCOUNT_SEALED);
