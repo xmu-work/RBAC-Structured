@@ -16,6 +16,7 @@ import com.iam.platform.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -62,6 +63,7 @@ public class DecisionService {
      * @param functionPointId 功能点 ID
      * @return 允许返回 true
      */
+    @Transactional(readOnly = true)
     public boolean hasPermission(Long userId, String systemCode, Long functionPointId) {
         return getUserFunctionPoints(userId, systemCode).contains(functionPointId);
     }
@@ -69,6 +71,7 @@ public class DecisionService {
     /**
      * 批量功能权限判定：只计算一次用户权限集合，再逐个比对。
      */
+    @Transactional(readOnly = true)
     public PermissionCheckResult checkPermissions(Long userId, String systemCode, List<Long> functionPointIds) {
         Set<Long> granted = getUserFunctionPoints(userId, systemCode);
         PermissionCheckResult result = new PermissionCheckResult();
@@ -83,6 +86,7 @@ public class DecisionService {
      *
      * <p>context 为空时只判功能权限；非空时叠加“本人/本部门/本项目”判定。
      */
+    @Transactional(readOnly = true)
     public DecisionResult decide(Long userId, String systemCode, Long functionPointId, ResourceContext context) {
         boolean functionAllowed = functionPointId == null || hasPermission(userId, systemCode, functionPointId);
         List<DataScopeView> dataScopes = resolveDataScopes(userId, systemCode);
@@ -94,6 +98,7 @@ public class DecisionService {
      * 查询用户在某子系统下已授权的功能点 ID 集合。
      */
     // ponytail: 每次判定 5~6 次查库，高并发时在此加 Redis 权限快照缓存（PermissionCacheComponent），授权变更时失效
+    @Transactional(readOnly = true)
     public Set<Long> getUserFunctionPoints(Long userId, String systemCode) {
         // 1. 用户必须存在且为正常状态
         boolean userNormal = userRepository.findById(userId)
@@ -135,6 +140,7 @@ public class DecisionService {
      *
      * <p>systemCode 作为接口契约保留，用于后续按系统细分数据范围。
      */
+    @Transactional(readOnly = true)
     public List<DataScopeView> resolveDataScopes(Long userId, String systemCode) {
         Set<Long> roleIds = activeRoleIds(userId);
         if (roleIds.isEmpty()) {
