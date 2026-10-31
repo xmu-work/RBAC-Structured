@@ -40,6 +40,17 @@ public class AuthController {
     }
 
     /**
+     * 自助修改密码。
+     */
+    @PutMapping("/password")
+    public Result<Void> changePassword(@RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long userId,
+                                       @RequestParam String oldPassword,
+                                       @RequestParam String newPassword) {
+        authService.changePassword(userId, oldPassword, newPassword);
+        return Result.success();
+    }
+
+    /**
      * 令牌校验。
      */
     @GetMapping("/validate")

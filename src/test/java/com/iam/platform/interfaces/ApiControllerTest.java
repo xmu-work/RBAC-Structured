@@ -149,6 +149,14 @@ class ApiControllerTest {
         verify(authService).logout("good-token");
     }
 
+    @Test
+    void changePasswordEndpointUsesAuthenticatedUser() throws Exception {
+        mvc.perform(put("/auth/password").header("Authorization", AUTH)
+                        .param("oldPassword", "Old@123456").param("newPassword", "New@123456"))
+                .andExpect(status().isOk());
+        verify(authService).changePassword(1L, "Old@123456", "New@123456");
+    }
+
     // ---------- 用户 ----------
 
     @Test
