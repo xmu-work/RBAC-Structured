@@ -3,7 +3,6 @@ import type {
   GrantPayload,
   Role,
   RoleCreatePayload,
-  RoleExclusion,
   UserRole,
 } from '@/types/role.types'
 
@@ -19,26 +18,18 @@ export function createRole(payload: RoleCreatePayload): Promise<Role> {
   return postForm<Role>('/roles', payload)
 }
 
-export function addRoleExclusion(
-  roleId: number,
-  excludedRoleId: number,
-  reason?: string,
-): Promise<void> {
-  return postForm<void>(`/roles/${roleId}/exclusions`, { excludedRoleId, reason })
-}
-
-export function listRoleExclusions(roleId: number): Promise<RoleExclusion[]> {
-  return get<RoleExclusion[]>(`/roles/${roleId}/exclusions`)
-}
-
 export function grantRole(payload: GrantPayload): Promise<UserRole> {
-  return postForm<UserRole>('/roles/grants', payload)
+  return postForm<UserRole>(`/roles/${payload.roleId}/assignments`, {
+    userId: payload.userId,
+    expireTime: payload.expireTime,
+    grantReason: payload.grantReason,
+  })
 }
 
 export function revokeRole(userId: number, roleId: number): Promise<void> {
-  return deleteForm<void>('/roles/grants', { userId, roleId })
+  return deleteForm<void>(`/roles/${roleId}/assignments/${userId}`)
 }
 
 export function listUserRoles(userId: number): Promise<UserRole[]> {
-  return get<UserRole[]>(`/roles/grants/${userId}`)
+  return get<UserRole[]>('/roles/assignments', { userId })
 }

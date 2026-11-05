@@ -22,15 +22,6 @@ export interface RoleCreatePayload {
   description?: string
 }
 
-export interface RoleExclusion {
-  id: number
-  roleId: number
-  excludedRoleId: number
-  description?: string
-  createdAt: string
-  createdBy?: number
-}
-
 export interface UserRole {
   id: number
   userId: number

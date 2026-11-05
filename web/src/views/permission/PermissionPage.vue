@@ -2,12 +2,12 @@
 import { ref } from 'vue'
 import SystemListCard from './components/SystemListCard.vue'
 import SystemCreateDialog from './components/SystemCreateDialog.vue'
-import ModuleRegisterCard from './components/ModuleRegisterCard.vue'
-import FunctionPointRegisterCard from './components/FunctionPointRegisterCard.vue'
-import RoleFunctionBindCard from './components/RoleFunctionBindCard.vue'
+import PermissionRegisterCard from './components/PermissionRegisterCard.vue'
+import ApiRegisterCard from './components/ApiRegisterCard.vue'
+import RolePermissionBindCard from './components/RolePermissionBindCard.vue'
 import type { System } from '@/types/system.types'
 
-/** 功能权限管理主页（契约 8.7）：上系统列表，下（模块/功能点登记 + 角色绑定） */
+/** 功能权限管理主页：多系统、前端权限树、后端 API 与角色授权。 */
 const systems = ref<System[]>([])
 const listReloadSignal = ref(0)
 const createDialogVisible = ref(false)
@@ -31,10 +31,10 @@ function handleSystemCreated(): void {
     />
     <div class="permission-page__grid">
       <div class="permission-page__column">
-        <ModuleRegisterCard :systems="systems" />
-        <FunctionPointRegisterCard />
+        <PermissionRegisterCard :systems="systems" />
+        <ApiRegisterCard :systems="systems" />
       </div>
-      <RoleFunctionBindCard />
+      <RolePermissionBindCard />
     </div>
     <SystemCreateDialog v-model="createDialogVisible" @success="handleSystemCreated" />
   </div>

@@ -4,7 +4,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { listSystems } from '@/api/system.api'
 import { useDict } from '@/composables/useDict'
 import type { System } from '@/types/system.types'
-import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { ADMIN_ACTION_PERMISSIONS as FP } from '@/constants/permissions'
 import { dateTimeColumnFormatter } from '@/utils/time'
 
 /** 接入系统列表卡片（契约 8.7）：系统登记入口；系统编辑/停用 [缺] 端点 */

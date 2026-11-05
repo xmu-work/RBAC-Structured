@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   title: string
-  functionPointId?: number
+  permissionId?: number
 }>()
 </script>
 
@@ -21,8 +21,8 @@ defineProps<{
           <div class="module-placeholder__mark">RBAC</div>
         </template>
         <p class="module-placeholder__hint">路由、权限过滤、主布局、会话与 API 基础层均已就绪。</p>
-        <p v-if="functionPointId" class="module-placeholder__meta">
-          功能点 ID：{{ functionPointId }}
+        <p v-if="permissionId" class="module-placeholder__meta">
+          权限 ID：{{ permissionId }}
         </p>
       </el-empty>
     </el-card>

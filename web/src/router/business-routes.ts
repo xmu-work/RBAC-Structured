@@ -1,5 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { ADMIN_FUNCTION_POINTS } from '@/constants/permissions'
+import { ADMIN_MENU_PERMISSIONS } from '@/constants/permissions'
 
 export const BUSINESS_LAYOUT_ROUTE_NAME = 'AppLayout'
 
@@ -15,7 +15,7 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '首页',
       icon: 'HomeFilled',
-      functionPointId: ADMIN_FUNCTION_POINTS.HOME,
+      permissionId: ADMIN_MENU_PERMISSIONS.HOME,
     },
   },
   {
@@ -25,7 +25,7 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '组织管理',
       icon: 'OfficeBuilding',
-      functionPointId: ADMIN_FUNCTION_POINTS.ORGANIZATION,
+      permissionId: ADMIN_MENU_PERMISSIONS.ORGANIZATION,
     },
   },
   {
@@ -35,7 +35,7 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '用户管理',
       icon: 'User',
-      functionPointId: ADMIN_FUNCTION_POINTS.USER,
+      permissionId: ADMIN_MENU_PERMISSIONS.USER,
     },
   },
   {
@@ -45,7 +45,7 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '角色管理',
       icon: 'Avatar',
-      functionPointId: ADMIN_FUNCTION_POINTS.ROLE,
+      permissionId: ADMIN_MENU_PERMISSIONS.ROLE,
     },
   },
   {
@@ -55,7 +55,7 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '授权管理',
       icon: 'Key',
-      functionPointId: ADMIN_FUNCTION_POINTS.GRANT,
+      permissionId: ADMIN_MENU_PERMISSIONS.GRANT,
     },
   },
   {
@@ -65,25 +65,25 @@ export const businessRouteChildren: RouteRecordRaw[] = [
     meta: {
       title: '功能权限',
       icon: 'Grid',
-      functionPointId: ADMIN_FUNCTION_POINTS.FUNCTION_PERMISSION,
+      permissionId: ADMIN_MENU_PERMISSIONS.FUNCTION_PERMISSION,
     },
   },
   {
-    path: 'audit',
+    path: 'logs',
     name: 'AuditPage',
     component: () => import('@/views/audit/AuditPage.vue'),
     meta: {
-      title: '审计日志',
+      title: '日志审计',
       icon: 'Document',
-      functionPointId: ADMIN_FUNCTION_POINTS.AUDIT,
+      permissionId: ADMIN_MENU_PERMISSIONS.LOGS,
     },
   },
 ]
 
 export function visibleBusinessRoutes(permissionIds: ReadonlySet<number>): RouteRecordRaw[] {
   return businessRouteChildren.filter((route) => {
-    const functionPointId = route.meta?.functionPointId
-    return functionPointId === undefined || permissionIds.has(functionPointId)
+    const permissionId = route.meta?.permissionId
+    return permissionId === undefined || permissionIds.has(permissionId)
   })
 }
 

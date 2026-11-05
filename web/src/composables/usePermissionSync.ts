@@ -19,7 +19,7 @@ export function usePermissionSync(): void {
     polling = true
     try {
       await refreshAccessRoutes(true)
-      const required = route.meta.functionPointId
+      const required = route.meta.permissionId
       if (required !== undefined && !permissionStore.canAccess(required)) {
         await router.replace('/403')
       }

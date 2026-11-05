@@ -17,8 +17,8 @@ export const usePermissionStore = defineStore('permission', () => {
 
   const count = computed(() => permissionIds.value.size)
 
-  function canAccess(functionPointId?: number): boolean {
-    return functionPointId === undefined || permissionIds.value.has(functionPointId)
+  function canAccess(permissionId?: number): boolean {
+    return permissionId === undefined || permissionIds.value.has(permissionId)
   }
 
   function setPermissions(ids: Iterable<number>): boolean {

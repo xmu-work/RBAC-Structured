@@ -42,7 +42,7 @@ const moveSubmitting = ref(false)
 const moveSource = ref<OrgTreeNode | null>(null)
 const moveTarget = ref<OrgTreeNode | null>(null)
 
-/** 懒加载：根层走 GET /orgs，其余走 children 端点（契约 8.3，共享 composable） */
+/** 懒加载：根层走 GET /organizations，其余走 children 端点。 */
 const { loadChildren } = useOrgLazyLoad({
   onRootLoaded: (count) => {
     rootCount.value = count

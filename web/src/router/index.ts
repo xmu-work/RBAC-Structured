@@ -91,8 +91,8 @@ export function installRouterGuards(): void {
       return { name: 'ForbiddenPage', replace: true }
     }
 
-    if (to.meta.functionPointId !== undefined) {
-      if (!permissionStore.canAccess(to.meta.functionPointId)) {
+    if (to.meta.permissionId !== undefined) {
+      if (!permissionStore.canAccess(to.meta.permissionId)) {
         return { name: 'ForbiddenPage', replace: true }
       }
     }

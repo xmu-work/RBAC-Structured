@@ -1,7 +1,10 @@
 import type { PageQuery } from './common'
 
-export interface AuditLog {
+export type LogType = 'ACTION' | 'PERMISSION_CHANGE'
+
+export interface LogEntry {
   logId: number
+  logType: LogType
   userId?: number
   username?: string
   action: string
@@ -11,12 +14,16 @@ export interface AuditLog {
   ip?: string
   systemCode?: string
   detail?: string
+  beforeSnapshot?: string
+  afterSnapshot?: string
   decisionId?: string
+  requestId?: string
 }
 
-export interface AuditLogQuery extends PageQuery {
+export interface LogQuery extends PageQuery {
   userId?: number
   systemCode?: string
+  logType?: LogType
   /** ISO 本地时间 YYYY-MM-DDTHH:mm:ss */
   startTime?: string
   /** ISO 本地时间 YYYY-MM-DDTHH:mm:ss */

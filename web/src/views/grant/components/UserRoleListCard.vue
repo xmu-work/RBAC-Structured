@@ -6,7 +6,7 @@ import { useDict } from '@/composables/useDict'
 import { GrantStatus, type GrantStatusCode } from '@/constants/enums'
 import type { Role, UserRole } from '@/types/role.types'
 import { formatDateTime } from '@/utils/time'
-import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { ADMIN_ACTION_PERMISSIONS as FP } from '@/constants/permissions'
 
 /**
  * 用户角色列表卡（契约 8.6）：展示生效/过期/回收状态；临期 7 天徽标提醒；
@@ -147,7 +147,7 @@ function asGrant(row: unknown): UserRole {
         <template #default="{ row }">
           <el-button
             v-if="asGrant(row).status === GrantStatus.ACTIVE"
-            v-perm.disable="FP.GRANT_REVOKE"
+            v-perm.disable="FP.ROLE_REVOKE"
             link
             type="danger"
             @click="emit('revoke', asGrant(row))"

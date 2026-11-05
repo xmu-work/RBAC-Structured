@@ -2,14 +2,14 @@
 import { ref } from 'vue'
 import AuditTableCard from './components/AuditTableCard.vue'
 import AuditDetailDrawer from './components/AuditDetailDrawer.vue'
-import type { AuditLog } from '@/types/audit.types'
+import type { LogEntry } from '@/types/log.types'
 
-/** 审计日志主页（契约 8.9）：查询卡 + 详情抽屉 */
+/** 统一日志主页：普通操作和权限变更共用查询与详情。 */
 const tableReloadSignal = ref(0)
 const detailDrawerVisible = ref(false)
-const detailLog = ref<AuditLog | null>(null)
+const detailLog = ref<LogEntry | null>(null)
 
-function handleDetail(log: AuditLog): void {
+function handleDetail(log: LogEntry): void {
   detailLog.value = log
   detailDrawerVisible.value = true
 }
