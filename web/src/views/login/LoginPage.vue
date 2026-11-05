@@ -11,7 +11,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'
 
 const form = reactive({
   username: '',
@@ -139,7 +138,6 @@ async function submit(): Promise<void> {
           </el-button>
         </el-form>
 
-        <p v-if="useMock" class="login-card__mock">Mock 模式：输入任意非空账号与密码即可登录</p>
       </el-card>
       <p class="login-page__copyright">统一应用软件权限管理系统</p>
     </section>
@@ -252,13 +250,6 @@ async function submit(): Promise<void> {
 .login-card__submit {
   width: 100%;
   margin-top: var(--space-2);
-}
-
-.login-card__mock {
-  margin: var(--space-5) var(--space-0) var(--space-0);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  text-align: center;
 }
 
 .login-page__copyright {
