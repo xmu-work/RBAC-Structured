@@ -1,5 +1,7 @@
 # RBAC 后端 API 使用手册
 
+> **模型 V2.0（2026-11-06）**：RBAC 核心已拆分为“多系统、前端权限树、后端 API、角色、用户、分层组织”六个实体；普通操作日志与权限变更日志统一到 `/logs`。当前有效路由以 [README](README.md#api-概览) 和 [API 设计说明书](design/04_API设计说明书.adoc) 为准。本文 `A11～A20` 的旧角色授权/模块/功能点段落及 `A29～A30` 的角色互斥段落属于历史契约，不再作为当前接口定义。
+
 **版本：1.1 · 代码基准：8d78558 · 编写与检查日期：2026-10-26（北京时间）**
 
 > 1.1 修订：组织机构 A24～A28 已实现，按实际行为重写；初始化接口功能点扩展为 20001～20022；`seed.sql` 新增两个组织节点并设置会话时区。其余接口内容沿用 1.0。
@@ -246,7 +248,7 @@ Authorization: Bearer <accessToken>
 | [A31](#a31) | `POST /systems/data-scopes` | 创建数据范围字典 | 待实现 | 仅令牌 |
 | [A32](#a32) | `GET /systems/data-scopes` | 查询数据范围字典 | 待实现 | 仅令牌 |
 | [A33](#a33) | `POST /systems/role-data-scopes` | 绑定角色数据范围 | 待实现 | 仅令牌 |
-| [A34](#a34) | `GET /audit-logs` | 分页查询审计日志 | 待实现 | 仅令牌 |
+| [A34](#a34) | `GET /logs` | 分页查询统一日志 | 已实现 | 20029 |
 
 ## 5. 接口逐项使用说明
 
@@ -1404,38 +1406,37 @@ curl -sS -G -X POST "$BASE_URL/systems/role-data-scopes" \
 
 <a id="a34"></a>
 
-#### A34 · 分页查询审计日志
+#### A34 · 分页查询统一日志
 
-**`GET /api/v1/audit-logs`** · **待实现**
+**`GET /api/v1/logs`** · **已实现**
 
-认证：必需 Bearer 令牌；初始化未登记接口功能点。
+认证：必需 Bearer 令牌；接口功能点 ID 为 20029。
 
 | 参数 | 位置 | 类型 | 必需 | 默认 | 说明 |
 | --- | --- | --- | --- | --- | --- |
-| `page` | query | int32 | 否 | 1 | 当前尚未执行分页逻辑。 |
-| `size` | query | int32 | 否 | 20 | 当前尚未执行分页逻辑。 |
+| `page` | query | int32 | 否 | 1 | 页码，从 1 开始。 |
+| `size` | query | int32 | 否 | 20 | 每页数量，最大 100。 |
 | `userId` | query | int64 | 否 | — | 操作用户。 |
 | `systemCode` | query | string | 否 | — | 系统编码。 |
+| `logType` | query | string | 否 | — | `ACTION` 普通操作 / `PERMISSION_CHANGE` 权限变更。 |
 | `startTime` | query | 本地日期时间 | 否 | — | 签名使用 ISO 日期时间绑定；不是后端强制必填。 |
 | `endTime` | query | 本地日期时间 | 否 | — | 签名使用 ISO 日期时间绑定；不是后端强制必填。 |
 
 **实际行为**
 
-- 当前控制器直接抛出 UnsupportedOperationException("待实现")，没有可用成功响应。
-- 以下是现有方法签名，不是已运行的业务契约；认证和参数绑定先执行，因此可能先返回 401、403 或 400。
-- 不能把审计返回写成已实现的 PageResult：当前方法声明是 Spring Page，尚未落实实际成功结构。前端期望与后端声明的差异仍待后续实现时统一。
+- 统一日志按操作时间倒序依赖调用方传入的排序参数；返回 `PageResult<IamLog>`。
+- 权限变更日志包含 `beforeSnapshot` 和 `afterSnapshot`，普通操作日志这两个字段为 null。
 
-**返回 data**：`声明 Spring Page<IamAuditLog>；当前无成功数据`。
+**返回 data**：`PageResult<IamLog>`。
 
-**失败与边界**：合法请求通过认证与参数绑定后：500/5000，message="服务器内部错误"；并非 501。
-
-**请求示例（当前仅可验证失败行为）**
+**请求示例**
 
 ```bash
-curl -sS -G -X GET "$BASE_URL/audit-logs" \
+curl -sS -G -X GET "$BASE_URL/logs" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   --data-urlencode "page=1" \
   --data-urlencode "size=20" \
+  --data-urlencode "logType=PERMISSION_CHANGE" \
   --data-urlencode "startTime=2026-10-26T00:00:00" \
   --data-urlencode "endTime=2026-10-26T23:59:59"
 ```
@@ -1631,13 +1632,12 @@ A24～A28 的返回类型。实体没有 `children` 字段。
 | `status` | string | 数据范围字典状态，当前没有成功业务响应。 |
 | `createdAt` | string / 本地日期时间 | 创建时间。 |
 
-### 6.13 IamAuditLog
-
-仅未实现接口的声明类型，当前无成功响应。
+### 6.13 IamLog
 
 | 字段 | JSON 类型 | 说明 |
 | --- | --- | --- |
-| `logId` | int64 | 审计记录主键。 |
+| `logId` | int64 | 日志主键。 |
+| `logType` | string | `ACTION` 或 `PERMISSION_CHANGE`。 |
 | `userId` | int64 | 关联操作用户主键，可为 null，例如系统事件。 |
 | `username` | string | 操作用户名快照，可为 null。 |
 | `action` | string | 操作动作文本。 |
@@ -1647,7 +1647,10 @@ A24～A28 的返回类型。实体没有 `children` 字段。
 | `ip` | string | 来源地址文本，可为 null。 |
 | `systemCode` | string | 所属系统编码，可为 null。 |
 | `detail` | string | 详情文本，可为 null；Java 类型为 String，即使数据库列为 JSON，也不能据此声明实际 HTTP 返回为对象。 |
+| `beforeSnapshot` | string | 权限变更前 JSON 快照，可为 null。 |
+| `afterSnapshot` | string | 权限变更后 JSON 快照，可为 null。 |
 | `decisionId` | string | 决策关联标识，可为 null。 |
+| `requestId` | string | 请求追踪 ID，可为 null。 |
 
 ### 6.14 分页、数组和批量结果
 
@@ -1685,12 +1688,12 @@ A24～A28 的返回类型。实体没有 `children` 字段。
 | 类型 | 实际形状与约束 |
 | --- | --- |
 | PageResult<T> | total：int64；page：int32；pageSize：int32；list：T[]。超出末页时 list=[]，total 仍是匹配总数。 |
-| IamRole[] / IamSystem[] / IamUserRole[] / IamRoleFunction[] | data 是对象数组。通常无数据为 []，不是 null；没有分页包装或顺序保证。 |
+| IamRole[] / IamSystem[] / IamUserRole[] / IamRolePermission[] | data 是对象数组。通常无数据为 []，不是 null；没有分页包装或顺序保证。 |
 | boolean | data 是 true/false，不是字符串 "true"。拒绝业务目标与入口 403 是两个不同结果。 |
 | int64[] | data 是去重数字数组；集合的输出顺序不保证。 |
 | PermissionCheckResult | data={"results":{"5001":true,"5002":false}}；键是字符串，值是 boolean；空输入数组为 results={}。 |
 | 无 data | 成功外层 code=0，省略 data 字段；响应仍有 JSON 内容且 HTTP 为 200。 |
-| Spring Page<IamAuditLog> | 仅审计待实现方法的声明；当前没有可依赖的成功分页形状，不能套用用户 PageResult。 |
+| PageResult<IamLog> | 统一日志分页结果，字段包含 logType 与权限变更前后快照。 |
 
 ## 7. 全部业务枚举与状态码值
 
