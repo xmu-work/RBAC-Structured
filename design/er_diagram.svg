@@ -1,71 +1,118 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1280" viewBox="0 0 2000 1280" font-family="Microsoft YaHei,SimHei,sans-serif">
-<rect width="2000" height="1280" fill="#ffffff"/>
-<text x="1000" y="40" text-anchor="middle" font-size="26" font-weight="bold">统一应用软件权限管理系统 — ER 图（实体-关系图）</text>
-<rect x="90" y="230" width="230" height="156" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="90" y="230" width="230" height="46" fill="#1f4e8c"/><text x="205.0" y="251" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">组织机构</text><text x="205.0" y="268" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_org</text><text x="102" y="292" font-size="12.5" fill="#222">PK id</text><text x="102" y="314" font-size="12.5" fill="#222">parent_id (自关联)</text><text x="102" y="336" font-size="12.5" fill="#222">org_code UK</text><text x="102" y="358" font-size="12.5" fill="#222">org_name</text><text x="102" y="380" font-size="12.5" fill="#222">org_type:HQ/BRANCH/DEPT/PROJ</text>
-<rect x="90" y="520" width="230" height="178" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="90" y="520" width="230" height="46" fill="#1f4e8c"/><text x="205.0" y="541" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">账号/员工</text><text x="205.0" y="558" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_user</text><text x="102" y="582" font-size="12.5" fill="#222">PK id</text><text x="102" y="604" font-size="12.5" fill="#222">user_no UK</text><text x="102" y="626" font-size="12.5" fill="#b03030">*name_enc 加密</text><text x="102" y="648" font-size="12.5" fill="#b03030">*phone_enc 加密</text><text x="102" y="670" font-size="12.5" fill="#222">FK org_id</text><text x="102" y="692" font-size="12.5" fill="#222">account_status</text>
-<rect x="60" y="900" width="230" height="156" rx="4" fill="#f2f2f2" stroke="#666" stroke-width="1.8"/><rect x="60" y="900" width="230" height="46" fill="#666"/><text x="175.0" y="921" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">审计日志</text><text x="175.0" y="938" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_audit_log</text><text x="72" y="962" font-size="12.5" fill="#222">PK log_id</text><text x="72" y="984" font-size="12.5" fill="#222">FK user_id</text><text x="72" y="1006" font-size="12.5" fill="#222">action 操作</text><text x="72" y="1028" font-size="12.5" fill="#222">operate_time 时间</text><text x="72" y="1050" font-size="12.5" fill="#222">success 成功与否</text>
-<rect x="340" y="920" width="240" height="134" rx="4" fill="#f2f2f2" stroke="#666" stroke-width="1.8"/><rect x="340" y="920" width="240" height="46" fill="#666"/><text x="460.0" y="941" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">权限变更记录</text><text x="460.0" y="958" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_permission_change_log</text><text x="352" y="982" font-size="12.5" fill="#222">PK change_id</text><text x="352" y="1004" font-size="12.5" fill="#222">FK user_id</text><text x="352" y="1026" font-size="12.5" fill="#222">change_type</text><text x="352" y="1048" font-size="12.5" fill="#222">before/after 快照</text>
-<rect x="400" y="430" width="190" height="134" rx="4" fill="#fff6e0" stroke="#8a6d1d" stroke-width="1.8"/><rect x="400" y="430" width="190" height="46" fill="#8a6d1d"/><text x="495.0" y="451" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">用户-角色绑定</text><text x="495.0" y="468" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_user_role</text><text x="412" y="492" font-size="12.5" fill="#222">PK id</text><text x="412" y="514" font-size="12.5" fill="#222">FK user_id</text><text x="412" y="536" font-size="12.5" fill="#222">FK role_id</text><text x="412" y="558" font-size="12.5" fill="#222">expire_time</text>
-<rect x="720" y="430" width="230" height="156" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="720" y="430" width="230" height="46" fill="#1f4e8c"/><text x="835.0" y="451" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">角色</text><text x="835.0" y="468" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_role</text><text x="732" y="492" font-size="12.5" fill="#222">PK id</text><text x="732" y="514" font-size="12.5" fill="#222">role_code UK</text><text x="732" y="536" font-size="12.5" fill="#222">role_name</text><text x="732" y="558" font-size="12.5" fill="#222">role_type:FUNC/DATA</text><text x="732" y="580" font-size="12.5" fill="#222">parent_id (继承)</text>
-<rect x="720" y="180" width="230" height="112" rx="4" fill="#fff6e0" stroke="#8a6d1d" stroke-width="1.8"/><rect x="720" y="180" width="230" height="46" fill="#8a6d1d"/><text x="835.0" y="201" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">角色互斥</text><text x="835.0" y="218" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_role_exclusion</text><text x="732" y="242" font-size="12.5" fill="#222">PK id</text><text x="732" y="264" font-size="12.5" fill="#222">FK role_id</text><text x="732" y="286" font-size="12.5" fill="#222">FK excluded_role_id</text>
-<rect x="1040" y="430" width="230" height="134" rx="4" fill="#fff6e0" stroke="#8a6d1d" stroke-width="1.8"/><rect x="1040" y="430" width="230" height="46" fill="#8a6d1d"/><text x="1155.0" y="451" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">角色-功能授权</text><text x="1155.0" y="468" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_role_function</text><text x="1052" y="492" font-size="12.5" fill="#222">PK id</text><text x="1052" y="514" font-size="12.5" fill="#222">FK role_id</text><text x="1052" y="536" font-size="12.5" fill="#222">FK function_point_id</text><text x="1052" y="558" font-size="12.5" fill="#222">allowed_action</text>
-<rect x="720" y="720" width="230" height="134" rx="4" fill="#fff6e0" stroke="#8a6d1d" stroke-width="1.8"/><rect x="720" y="720" width="230" height="46" fill="#8a6d1d"/><text x="835.0" y="741" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">角色-数据范围授权</text><text x="835.0" y="758" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_role_data_scope</text><text x="732" y="782" font-size="12.5" fill="#222">PK id</text><text x="732" y="804" font-size="12.5" fill="#222">FK role_id</text><text x="732" y="826" font-size="12.5" fill="#222">FK scope_id</text><text x="732" y="848" font-size="12.5" fill="#222">org_id/project_id</text>
-<rect x="1040" y="730" width="210" height="112" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="1040" y="730" width="210" height="46" fill="#1f4e8c"/><text x="1145.0" y="751" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">数据范围字典</text><text x="1145.0" y="768" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_data_scope</text><text x="1052" y="792" font-size="12.5" fill="#222">PK id</text><text x="1052" y="814" font-size="12.5" fill="#222">scope_type</text><text x="1052" y="836" font-size="12.5" fill="#222">scope_name</text>
-<rect x="1370" y="110" width="230" height="134" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="1370" y="110" width="230" height="46" fill="#1f4e8c"/><text x="1485.0" y="131" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">业务接入系统</text><text x="1485.0" y="148" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_system</text><text x="1382" y="172" font-size="12.5" fill="#222">PK id</text><text x="1382" y="194" font-size="12.5" fill="#222">system_code UK</text><text x="1382" y="216" font-size="12.5" fill="#222">system_name</text><text x="1382" y="238" font-size="12.5" fill="#222">callback_url</text>
-<rect x="1660" y="300" width="220" height="112" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="1660" y="300" width="220" height="46" fill="#1f4e8c"/><text x="1770.0" y="321" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">功能模块</text><text x="1770.0" y="338" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_module</text><text x="1672" y="362" font-size="12.5" fill="#222">PK id</text><text x="1672" y="384" font-size="12.5" fill="#222">FK system_id</text><text x="1672" y="406" font-size="12.5" fill="#222">module_name</text>
-<rect x="1660" y="500" width="230" height="134" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="1660" y="500" width="230" height="46" fill="#1f4e8c"/><text x="1775.0" y="521" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">功能点</text><text x="1775.0" y="538" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_function_point</text><text x="1672" y="562" font-size="12.5" fill="#222">PK id</text><text x="1672" y="584" font-size="12.5" fill="#222">FK module_id</text><text x="1672" y="606" font-size="12.5" fill="#222">point_name</text><text x="1672" y="628" font-size="12.5" fill="#222">api_path+method</text>
-<rect x="1660" y="780" width="230" height="156" rx="4" fill="#eaf2fc" stroke="#1f4e8c" stroke-width="1.8"/><rect x="1660" y="780" width="230" height="46" fill="#1f4e8c"/><text x="1775.0" y="801" text-anchor="middle" font-size="16" font-weight="bold" fill="#ffffff">令牌</text><text x="1775.0" y="818" text-anchor="middle" font-size="11.5" fill="#d7e6ff">iam_token</text><text x="1672" y="842" font-size="12.5" fill="#222">PK token_id</text><text x="1672" y="864" font-size="12.5" fill="#222">FK user_id</text><text x="1672" y="886" font-size="12.5" fill="#222">FK system_code</text><text x="1672" y="908" font-size="12.5" fill="#222">expire_at</text><text x="1672" y="930" font-size="12.5" fill="#222">revoked</text>
-<path d="M90,265 L45,265 L45,335 L90,335" fill="none" stroke="#666" stroke-width="1.4"/>
-<text x="30" y="260" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="28" y="345" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="205" y1="360" x2="205" y2="520" stroke="#666" stroke-width="1.4"/>
-<text x="215" y="445" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="215" y="515" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="320" y1="560" x2="400" y2="475" stroke="#666" stroke-width="1.4"/>
-<text x="330" y="545" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="375" y="465" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="590" y1="485" x2="720" y2="490" stroke="#666" stroke-width="1.4"/>
-<text x="640" y="475" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<text x="700" y="478" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<path d="M720,465 L675,465 L675,535 L720,535" fill="none" stroke="#666" stroke-width="1.4"/>
-<text x="655" y="460" font-size="14" font-weight="bold" fill="#0a7a30">父1</text>
-<text x="650" y="550" font-size="14" font-weight="bold" fill="#0a7a30">子N</text>
-<line x1="835" y1="270" x2="835" y2="430" stroke="#666" stroke-width="1.4"/>
-<text x="845" y="345" font-size="14" font-weight="bold" fill="#0a7a30">M</text>
-<text x="845" y="425" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="950" y1="490" x2="1040" y2="485" stroke="#666" stroke-width="1.4"/>
-<text x="985" y="478" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="1020" y="475" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="1270" y1="485" x2="1660" y2="555" stroke="#666" stroke-width="1.4"/>
-<text x="1440" y="510" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<text x="1625" y="540" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<line x1="835" y1="560" x2="835" y2="720" stroke="#666" stroke-width="1.4"/>
-<text x="845" y="635" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="845" y="715" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="950" y1="775" x2="1040" y2="775" stroke="#666" stroke-width="1.4"/>
-<text x="985" y="768" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<text x="1020" y="768" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<line x1="1500" y1="220" x2="1740" y2="300" stroke="#666" stroke-width="1.4"/>
-<text x="1510" y="245" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="1700" y="290" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="1770" y1="390" x2="1770" y2="500" stroke="#666" stroke-width="1.4"/>
-<text x="1780" y="445" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="1780" y="495" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<path d="M1600,165 L1920,165 L1920,845 L1890,845" fill="none" stroke="#666" stroke-width="1.4"/>
-<text x="1610" y="158" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="1925" y="840" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<path d="M180,670 L180,1090 L1775,1090 L1775,910" fill="none" stroke="#666" stroke-width="1.4"/>
-<text x="190" y="880" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="1690" y="1080" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="175" y1="670" x2="175" y2="900" stroke="#666" stroke-width="1.4"/>
-<text x="185" y="790" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="185" y="895" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<line x1="280" y1="670" x2="450" y2="920" stroke="#666" stroke-width="1.4"/>
-<text x="300" y="700" font-size="14" font-weight="bold" fill="#0a7a30">1</text>
-<text x="420" y="905" font-size="14" font-weight="bold" fill="#0a7a30">N</text>
-<rect x="90" y="1180" width="22" height="16" fill="#eaf2fc" stroke="#1f4e8c"/><text x="120" y="1193" font-size="14">实体</text>
-<rect x="190" y="1180" width="22" height="16" fill="#fff6e0" stroke="#8a6d1d"/><text x="220" y="1193" font-size="14">关联/关系表</text>
-<rect x="330" y="1180" width="22" height="16" fill="#f2f2f2" stroke="#666"/><text x="360" y="1193" font-size="14">只追加弱实体(日志)</text>
-<text x="520" y="1193" font-size="14" fill="#b03030">* 加密字段（姓名/电话）</text>
-<text x="730" y="1193" font-size="14" fill="#0a7a30">绿色数字为关系基数 1 / N / M</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1150" viewBox="0 0 1800 1150" font-family="PingFang SC,Microsoft YaHei,SimHei,sans-serif">
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#333"/></marker><marker id="arrb" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#1f4e8c"/></marker></defs>
+<rect width="1800" height="1150" fill="#ffffff"/>
+<text x="900.0" y="42" text-anchor="middle" font-size="26" font-weight="bold">统一应用软件权限管理系统 — RBAC 核心 E-R 图</text>
+<path d="M250,205 L700,255" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="520,170.0 580.0,205 520,240.0 460.0,205" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="520" y="198" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">定义</text>
+<text x="520" y="219" text-anchor="middle" font-size="11" fill="#755c16">系统拥有权限</text>
+<rect x="431" y="178" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="445" y="192" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">1</text>
+<rect x="636" y="181" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="650" y="195" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<path d="M250,150 L250,75 L1440,75 L1440,190" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="1100,40.0 1165.0,75 1100,110.0 1035.0,75" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="1100" y="68" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">拥有</text>
+<text x="1100" y="89" text-anchor="middle" font-size="11" fill="#755c16">系统组件</text>
+<rect x="306" y="48" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="320" y="62" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">1</text>
+<rect x="1516" y="106" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="1530" y="120" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<path d="M1080,310 L1130,310 L1130,300 L1340,300" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="1130,275.0 1195.0,310 1130,345.0 1065.0,310" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="1130" y="303" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">映射</text>
+<text x="1130" y="324" text-anchor="middle" font-size="11" fill="#755c16">权限→API</text>
+<rect x="1086" y="268" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="1100" y="282" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">1</text>
+<rect x="1306" y="268" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="1320" y="282" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<path d="M890,220 L890,130 L1010,130 L1010,220" fill="none" stroke="#6683a6" stroke-width="2"/>
+<path d="M1010,220 l-8,-13 M1010,220 l8,-13" fill="none" stroke="#6683a6" stroke-width="2"/>
+<rect x="936" y="98" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="950" y="112" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">1 : N</text>
+<text x="950" y="155" text-anchor="middle" font-size="12" fill="#49678f">父子菜单 / 按钮</text>
+<path d="M870,360 L870,440 L870,520" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="870,450.0 955.0,480 870,510.0 785.0,480" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="870" y="473" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">授权</text>
+<text x="870" y="494" text-anchor="middle" font-size="11" fill="#755c16">iam_role_permission</text>
+<rect x="926" y="448" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="940" y="462" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">M</text>
+<rect x="926" y="491" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="940" y="505" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<path d="M820,820 L870,690" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="845,718.0 920.0,755 845,792.0 770.0,755" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="845" y="748" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">分配</text>
+<text x="845" y="769" text-anchor="middle" font-size="11" fill="#755c16">iam_user_role</text>
+<rect x="791" y="801" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="805" y="815" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">M</text>
+<rect x="856" y="686" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="870" y="700" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<path d="M460,900 L650,900" fill="none" stroke="#394b61" stroke-width="2"/>
+<polygon points="550,865.0 615.0,900 550,935.0 485.0,900" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="550" y="893" text-anchor="middle" font-size="14" font-weight="bold" fill="#5e4810">隶属于</text>
+<text x="550" y="914" text-anchor="middle" font-size="11" fill="#755c16">组织→用户</text>
+<rect x="486" y="864" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="500" y="878" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">1</text>
+<rect x="636" y="864" width="28" height="20" rx="5" fill="#fff" stroke="none"/>
+<text x="650" y="878" text-anchor="middle" font-size="15" font-weight="bold" fill="#b03030">N</text>
+<rect x="80" y="130" width="340" height="190" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M88,130 H412 Q420,130 420,138 V178 H80 V138 Q80,130 88,130 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="96" y="152" font-size="18" font-weight="bold" fill="#173b6b">多系统</text>
+<text x="96" y="171" font-size="12" fill="#49678f">iam_system</text>
+<text x="96" y="202" font-size="13" fill="#202a36">PK  id</text>
+<text x="96" y="226" font-size="13" fill="#202a36">UK  system_code</text>
+<text x="96" y="250" font-size="13" fill="#202a36">     system_name</text>
+<text x="96" y="274" font-size="13" fill="#202a36">     status / callback_url</text>
+<rect x="700" y="220" width="380" height="220" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M708,220 H1072 Q1080,220 1080,228 V268 H700 V228 Q700,220 708,220 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="716" y="242" font-size="18" font-weight="bold" fill="#173b6b">权限（前端菜单/按钮树）</text>
+<text x="716" y="261" font-size="12" fill="#49678f">iam_permission</text>
+<text x="716" y="292" font-size="13" fill="#202a36">PK  id</text>
+<text x="716" y="316" font-size="13" fill="#202a36">FK  system_id  → iam_system</text>
+<text x="716" y="340" font-size="13" fill="#202a36">FK  parent_id  → iam_permission（自关联）</text>
+<text x="716" y="364" font-size="13" fill="#202a36">UK  system_id + permission_code</text>
+<text x="716" y="388" font-size="13" fill="#202a36">     permission_type：MENU / BUTTON</text>
+<text x="716" y="412" font-size="13" fill="#202a36">     route_path / action / sort_no</text>
+<rect x="1340" y="190" width="360" height="220" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M1348,190 H1692 Q1700,190 1700,198 V238 H1340 V198 Q1340,190 1348,190 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="1356" y="212" font-size="18" font-weight="bold" fill="#173b6b">API（后端接口）</text>
+<text x="1356" y="231" font-size="12" fill="#49678f">iam_api</text>
+<text x="1356" y="262" font-size="13" fill="#202a36">PK  id</text>
+<text x="1356" y="286" font-size="13" fill="#202a36">FK  system_id    → iam_system</text>
+<text x="1356" y="310" font-size="13" fill="#202a36">FK  permission_id → iam_permission</text>
+<text x="1356" y="334" font-size="13" fill="#202a36">UK  system_id + api_code</text>
+<text x="1356" y="358" font-size="13" fill="#202a36">UK  api_path + http_method</text>
+<text x="1356" y="382" font-size="13" fill="#202a36">     api_name / status</text>
+<rect x="700" y="520" width="340" height="170" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M708,520 H1032 Q1040,520 1040,528 V568 H700 V528 Q700,520 708,520 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="716" y="542" font-size="18" font-weight="bold" fill="#173b6b">角色</text>
+<text x="716" y="561" font-size="12" fill="#49678f">iam_role</text>
+<text x="716" y="592" font-size="13" fill="#202a36">PK  id</text>
+<text x="716" y="616" font-size="13" fill="#202a36">UK  role_code</text>
+<text x="716" y="640" font-size="13" fill="#202a36">     role_name / status</text>
+<text x="716" y="664" font-size="13" fill="#202a36">     parent_id（角色继承，可选）</text>
+<rect x="70" y="780" width="390" height="210" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M78,780 H452 Q460,780 460,788 V828 H70 V788 Q70,780 78,780 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="86" y="802" font-size="18" font-weight="bold" fill="#173b6b">分层组织部门</text>
+<text x="86" y="821" font-size="12" fill="#49678f">iam_org</text>
+<text x="86" y="852" font-size="13" fill="#202a36">PK  id</text>
+<text x="86" y="876" font-size="13" fill="#202a36">FK  parent_id → iam_org（自关联）</text>
+<text x="86" y="900" font-size="13" fill="#202a36">UK  org_code</text>
+<text x="86" y="924" font-size="13" fill="#202a36">     org_name / org_type / org_level</text>
+<text x="86" y="948" font-size="13" fill="#202a36">     ancestors：分层路径</text>
+<rect x="650" y="820" width="360" height="190" rx="8" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<path d="M658,820 H1002 Q1010,820 1010,828 V868 H650 V828 Q650,820 658,820 Z" fill="#eaf2fd" stroke="#1f4e8c" stroke-width="2"/>
+<text x="666" y="842" font-size="18" font-weight="bold" fill="#173b6b">用户</text>
+<text x="666" y="861" font-size="12" fill="#49678f">iam_user</text>
+<text x="666" y="892" font-size="13" fill="#202a36">PK  id</text>
+<text x="666" y="916" font-size="13" fill="#202a36">UK  user_no</text>
+<text x="666" y="940" font-size="13" fill="#202a36">FK  org_id → iam_org</text>
+<text x="666" y="964" font-size="13" fill="#202a36">     name_enc / phone_enc（加密）</text>
+<text x="666" y="988" font-size="13" fill="#202a36">     account_status / post</text>
+<line x1="60" y1="1060" x2="1740" y2="1060" stroke="#c9d1da" stroke-width="1"/>
+<polygon points="80,1085 110,1072 140,1085 110,1098" fill="#fff4cf" stroke="#9a7a22" stroke-width="2"/>
+<text x="155" y="1090" font-size="13" fill="#303946">联系（关联表不再画成独立实体）</text>
+<rect x="430" y="1071" width="28" height="24" rx="5" fill="#fff" stroke="#1f4e8c" stroke-width="2"/>
+<text x="475" y="1090" font-size="13" fill="#303946">六个业务实体</text>
+<text x="660" y="1090" font-size="13" fill="#8a2b2b">1 / N / M 为参与基数</text>
+<text x="930" y="1090" font-size="13" fill="#303946">鉴权链：请求 API → 所属权限 → 用户角色授予的权限；前端隐藏菜单不能替代后端 API 校验</text></svg>
