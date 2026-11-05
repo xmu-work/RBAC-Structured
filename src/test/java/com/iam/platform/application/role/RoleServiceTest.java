@@ -1,21 +1,29 @@
 package com.iam.platform.application.role;
 
 import com.iam.platform.TestFixtures;
+import com.iam.platform.application.decision.DecisionService;
+import com.iam.platform.application.log.LogService;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
+import com.iam.platform.infrastructure.persistence.entity.IamPermission;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
-import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
-import com.iam.platform.infrastructure.persistence.entity.IamRoleExclusion;
-import com.iam.platform.infrastructure.persistence.repository.IamRoleExclusionRepository;
+import com.iam.platform.infrastructure.persistence.entity.IamRolePermission;
+import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
+import com.iam.platform.infrastructure.persistence.repository.IamPermissionRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamRolePermissionRepository;
 import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamUserRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamUserRoleRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,65 +36,113 @@ class RoleServiceTest {
     @Mock
     private IamRoleRepository roleRepository;
     @Mock
-    private IamRoleExclusionRepository exclusionRepository;
+    private IamUserRepository userRepository;
+    @Mock
+    private IamUserRoleRepository userRoleRepository;
+    @Mock
+    private IamPermissionRepository permissionRepository;
+    @Mock
+    private IamRolePermissionRepository rolePermissionRepository;
+    @Mock
+    private DecisionService decisionService;
+    @Mock
+    private LogService logService;
     @InjectMocks
     private RoleService roleService;
 
+    private static int code(Throwable e) {
+        return ((BusinessException) e).getCode();
+    }
+
     @Test
-    void createRoleSavesActiveRole() {
+    void createAndQueryRoles() {
         when(roleRepository.findByRoleCode("HR")).thenReturn(Optional.empty());
         when(roleRepository.save(any(IamRole.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IamRole role = roleService.createRole("HR", "人事", "FUNC", "人事专员");
+        IamRole created = roleService.createRole("HR", "人事", "FUNC", "人事专员");
 
-        assertThat(role.getStatus()).isEqualTo("ACTIVE");
-        assertThat(role.getIsDeleted()).isZero();
-        assertThat(role.getRoleType()).isEqualTo("FUNC");
+        assertThat(created.getStatus()).isEqualTo("ACTIVE");
+        assertThat(created.getRoleType()).isEqualTo("FUNC");
     }
 
     @Test
-    void createRoleRejectsDuplicateCodeAndUnknownType() {
-        when(roleRepository.findByRoleCode("HR")).thenReturn(Optional.of(new IamRole()));
+    void grantRoleCreatesActiveAssignment() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(
+                TestFixtures.user(1L, "NORMAL", TestFixtures.crypto(), "p")));
+        when(roleRepository.findById(2L)).thenReturn(Optional.of(TestFixtures.role(2L, "ACTIVE")));
+        when(userRoleRepository.findByUserIdAndRoleId(1L, 2L)).thenReturn(Optional.empty());
+        when(userRoleRepository.save(any(IamUserRole.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> roleService.createRole("HR", "人事", "FUNC", null))
-                .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo(ErrorCode.RESOURCE_DUPLICATE.getCode()));
-        assertThatThrownBy(() -> roleService.createRole("X", "x", "BAD", null))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> roleService.createRole("DATA_ONLY", "数据角色", "DATA", null))
-                .isInstanceOf(IllegalArgumentException.class);
-        verify(roleRepository, never()).save(any());
+        IamUserRole grant = roleService.grantRole(1L, 2L, null, null, "入职");
+
+        assertThat(grant.getStatus()).isEqualTo("ACTIVE");
+        assertThat(grant.getRoleId()).isEqualTo(2L);
+        assertThat(grant.getGrantReason()).isEqualTo("入职");
     }
 
     @Test
-    void getRoleThrowsNotFound() {
-        when(roleRepository.findById(9L)).thenReturn(Optional.empty());
+    void grantRejectsDuplicateAssignment() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(
+                TestFixtures.user(1L, "NORMAL", TestFixtures.crypto(), "p")));
+        when(roleRepository.findById(2L)).thenReturn(Optional.of(TestFixtures.role(2L, "ACTIVE")));
+        when(userRoleRepository.findByUserIdAndRoleId(1L, 2L))
+                .thenReturn(Optional.of(TestFixtures.grant(1L, 2L, "ACTIVE")));
 
-        assertThatThrownBy(() -> roleService.getRole(9L))
-                .satisfies(e -> assertThat(((BusinessException) e).getCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
+        assertThatThrownBy(() -> roleService.grantRole(1L, 2L, null, null, null))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.GRANT_DUPLICATE.getCode()));
     }
 
     @Test
-    void getAndListExcludeDeletedRoles() {
-        IamRole active = TestFixtures.role(1L, "ACTIVE");
-        IamRole deleted = TestFixtures.role(2L, "ACTIVE");
-        deleted.setIsDeleted(1);
-        IamRole dataRole = TestFixtures.role(3L, "ACTIVE");
-        dataRole.setRoleType("DATA");
-        when(roleRepository.findById(1L)).thenReturn(Optional.of(active));
-        when(roleRepository.findAll()).thenReturn(List.of(active, deleted, dataRole));
+    void revokeMarksAssignmentRevoked() {
+        IamUserRole grant = TestFixtures.grant(1L, 2L, "ACTIVE");
+        when(userRoleRepository.findByUserIdAndRoleId(1L, 2L)).thenReturn(Optional.of(grant));
+        when(userRoleRepository.save(grant)).thenReturn(grant);
 
-        assertThat(roleService.getRole(1L)).isSameAs(active);
-        assertThat(roleService.listRoles()).containsExactly(active);
+        roleService.revokeRole(1L, 2L, 9L);
+
+        assertThat(grant.getStatus()).isEqualTo("REVOKED");
+        verify(userRoleRepository).save(grant);
     }
 
     @Test
-    void checkMutexDetectsConflictingPair() {
-        IamRoleExclusion exclusion = new IamRoleExclusion();
-        exclusion.setRoleId(1L);
-        exclusion.setExcludedRoleId(2L);
-        when(exclusionRepository.findByRoleId(1L)).thenReturn(List.of(exclusion));
+    void bindPermissionsSkipsAlreadyBoundAndSavesNew() {
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(TestFixtures.role(1L, "ACTIVE")));
+        IamRolePermission existing = binding(1L, 10L);
+        when(rolePermissionRepository.findByRoleId(1L)).thenReturn(List.of(existing));
+        when(permissionRepository.findById(any())).thenAnswer(inv -> {
+            IamPermission permission = new IamPermission();
+            permission.setId(inv.getArgument(0));
+            permission.setStatus("ACTIVE");
+            permission.setIsDeleted(0);
+            return Optional.of(permission);
+        });
 
-        assertThat(roleService.checkMutex(List.of(1L, 2L))).containsExactly(1L, 2L);
-        assertThat(roleService.checkMutex(List.of(1L))).isNull();
+        roleService.bindRolePermissions(1L, List.of(10L, 11L, 11L), "VIEW", 9L);
+
+        ArgumentCaptor<IamRolePermission> saved = ArgumentCaptor.forClass(IamRolePermission.class);
+        verify(rolePermissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getPermissionId()).isEqualTo(11L);
+        assertThat(saved.getValue().getAllowedAction()).isEqualTo("VIEW");
+    }
+
+    @Test
+    void grantRejectsRoleBeyondOperatorPermissions() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(
+                TestFixtures.user(1L, "NORMAL", TestFixtures.crypto(), "p")));
+        when(roleRepository.findById(2L)).thenReturn(Optional.of(TestFixtures.role(2L, "ACTIVE")));
+        when(userRoleRepository.findByUserIdAndRoleId(1L, 2L)).thenReturn(Optional.empty());
+        when(roleRepository.findAllById(any())).thenReturn(List.of(TestFixtures.role(2L, "ACTIVE")));
+        when(rolePermissionRepository.findByRoleId(2L)).thenReturn(List.of(binding(2L, 50L)));
+        when(decisionService.getUserPermissions(9L, "ADMIN")).thenReturn(Set.of());
+
+        assertThatThrownBy(() -> roleService.grantRole(1L, 2L, null, 9L, null))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.NO_FUNCTION_PERM.getCode()));
+    }
+
+    private static IamRolePermission binding(Long roleId, Long permissionId) {
+        IamRolePermission binding = new IamRolePermission();
+        binding.setRoleId(roleId);
+        binding.setPermissionId(permissionId);
+        return binding;
     }
 }

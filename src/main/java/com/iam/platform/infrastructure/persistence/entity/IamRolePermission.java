@@ -6,28 +6,27 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 角色互斥实体（iam_role_exclusion）。
+ * 角色-前端权限授权（iam_role_permission）。
  *
- * <p>互斥角色不能同时授予同一用户（如会计与出纳操作互斥）。
+ * <p>角色只直接绑定菜单/按钮权限；后端 API 权限由 API 所属权限间接推导。
  */
 @Data
 @Entity
-@Table(name = "iam_role_exclusion")
-public class IamRoleExclusion {
+@Table(name = "iam_role_permission")
+public class IamRolePermission {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
     private Long id;
 
     @Column(name = "role_id", nullable = false)
     private Long roleId;
 
-    @Column(name = "excluded_role_id", nullable = false)
-    private Long excludedRoleId;
+    @Column(name = "permission_id", nullable = false)
+    private Long permissionId;
 
-    @Column(name = "description", length = 255)
-    private String description;
+    @Column(name = "allowed_action", nullable = false, length = 64)
+    private String allowedAction;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -2,7 +2,7 @@ package com.iam.platform.application.account;
 
 import com.iam.platform.TestFixtures;
 import com.iam.platform.application.auth.AuthService;
-import com.iam.platform.application.grant.GrantService;
+import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
 import com.iam.platform.infrastructure.crypto.CryptoComponent;
@@ -35,14 +35,14 @@ class AccountServiceTest {
     @Mock
     private AuthService authService;
     @Mock
-    private GrantService grantService;
+    private RoleService roleService;
 
     private final CryptoComponent crypto = TestFixtures.crypto();
     private AccountService accountService;
 
     @BeforeEach
     void setUp() {
-        accountService = new AccountService(userRepository, crypto, authService, grantService);
+        accountService = new AccountService(userRepository, crypto, authService, roleService);
         ReflectionTestUtils.setField(accountService, "defaultPassword", "Init@123");
     }
 
@@ -122,7 +122,7 @@ class AccountServiceTest {
         assertThat(user.getAccountStatus()).isEqualTo("SEALED");
         assertThat(user.getLeaveTime()).isNotNull();
         verify(authService).revokeUserTokens(5L);
-        verify(grantService).revokeAllRoles(5L);
+        verify(roleService).revokeAllRoles(5L, null);
     }
 
     @Test
@@ -134,7 +134,7 @@ class AccountServiceTest {
         accountService.changeStatus(5L, "DISABLED", null);
 
         verify(authService).revokeUserTokens(5L);
-        verifyNoInteractions(grantService);
+        verifyNoInteractions(roleService);
     }
 
     @Test
@@ -146,7 +146,7 @@ class AccountServiceTest {
         accountService.changeStatus(5L, "NORMAL", null);
 
         assertThat(user.getAccountStatus()).isEqualTo("NORMAL");
-        verifyNoInteractions(authService, grantService);
+        verifyNoInteractions(authService, roleService);
     }
 
     @Test

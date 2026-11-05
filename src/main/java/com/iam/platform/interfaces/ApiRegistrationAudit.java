@@ -1,6 +1,6 @@
 package com.iam.platform.interfaces;
 
-import com.iam.platform.application.permission.FunctionPermissionService;
+import com.iam.platform.application.api.ApiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
@@ -17,25 +17,22 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 启动期接口登记检查（fail-closed 配置自检）。
+ * 启动期 API 登记检查。
  *
- * <p>扫描全部管理端 Controller 映射，凡未在 iam_function_point 登记 (api_path, api_method)
- * 的接口都会在启动日志中以 WARN 列出——这些接口在运行期会被 {@link AuthInterceptor} 按
- * fail-closed 策略直接拒绝，便于管理员及时发现“新增接口忘了登记”。
- *
- * <p>白名单（登录、登出、令牌校验、自助改密、开放 API、监控/健康检查）不参与检查。
+ * <p>未登记到 iam_api、未映射前端权限或未受保护的管理端接口会进入告警列表，
+ * 运行期由鉴权拦截器按 fail-closed 拒绝。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ApiFunctionPointAudit {
+public class ApiRegistrationAudit {
 
     private static final Set<String> IGNORED_PREFIXES = Set.of("/open/", "/actuator", "/error", "/druid");
     private static final Set<String> IGNORED_PATTERNS =
             Set.of("/auth/login", "/auth/logout", "/auth/validate", "/auth/password");
 
     private final ApplicationContext applicationContext;
-    private final FunctionPermissionService functionPermissionService;
+    private final ApiService apiService;
 
     @EventListener(ContextRefreshedEvent.class)
     public void auditUnregisteredApis() {
@@ -54,16 +51,17 @@ public class ApiFunctionPointAudit {
                         return;
                     }
                     for (String method : methodsOf(info)) {
-                        if (functionPermissionService.findByApi(pattern, method).isEmpty()) {
+                        if (apiService.findByRequest(pattern, method)
+                                .filter(api -> api.getPermissionId() != null).isEmpty()) {
                             missing.add(method + " " + pattern);
                         }
                     }
                 }));
 
         if (missing.isEmpty()) {
-            log.info("接口登记检查通过：全部管理端接口均已登记为功能点");
+            log.info("API 登记检查通过：全部管理端接口均已登记并映射到前端权限");
         } else {
-            log.warn("有 {} 个管理端接口未登记为功能点，运行期将按 fail-closed 策略被拒绝，请补充登记：\n  {}",
+            log.warn("有 {} 个管理端 API 未登记或未映射到前端权限，运行期将按 fail-closed 策略拒绝：\n  {}",
                     missing.size(), String.join("\n  ", missing));
         }
     }

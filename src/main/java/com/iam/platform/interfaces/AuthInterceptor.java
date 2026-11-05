@@ -1,12 +1,12 @@
 package com.iam.platform.interfaces;
 
-import com.iam.platform.application.audit.AuditService;
+import com.iam.platform.application.api.ApiService;
 import com.iam.platform.application.auth.AuthService;
 import com.iam.platform.application.decision.DecisionService;
-import com.iam.platform.application.permission.FunctionPermissionService;
+import com.iam.platform.application.log.LogService;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
-import com.iam.platform.infrastructure.persistence.entity.IamFunctionPoint;
+import com.iam.platform.infrastructure.persistence.entity.IamApi;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +21,10 @@ import java.util.Set;
  * 认证与鉴权拦截器。
  *
  * <p>默认拒绝（fail-closed）：除显式白名单外，请求对应的 API（映射模板 + HTTP 方法）
- * 必须已登记为功能点，且当前用户拥有该功能点，否则一律拒绝。
+ * 必须已登记为 API 且映射到前端权限，当前用户拥有该权限时才放行。
  *
  * <p>流程：取 Bearer 令牌 → 认证得到用户 ID（失败 401）→ 放行白名单 →
- * 查找功能点（查不到即拒绝）→ 判定用户是否拥有该功能点（无权 403）。
+ * 查找 API（查不到即拒绝）→ 取得 API 所属前端权限 → 判定用户是否拥有该权限（无权 403）。
  *
  * <p>审计：写操作在 {@link #afterCompletion} 中按服务端上下文记录操作人，客户端无法伪造归属。
  */
@@ -45,9 +45,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final Set<String> INFRA_PREFIXES = Set.of("/actuator", "/druid", "/error", "/favicon.ico");
 
     private final AuthService authService;
-    private final FunctionPermissionService functionPermissionService;
+    private final ApiService apiService;
     private final DecisionService decisionService;
-    private final AuditService auditService;
+    private final LogService logService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -64,11 +64,12 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String pattern = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        IamFunctionPoint fp = functionPermissionService.findByApi(pattern, request.getMethod())
+        IamApi api = apiService.findByRequest(pattern, request.getMethod())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NO_FUNCTION_PERM,
-                        "接口未登记为功能点，默认拒绝: " + request.getMethod() + " " + path));
-        if (!decisionService.hasPermission(userId, AuthService.ADMIN_SYSTEM_CODE, fp.getId())) {
-            throw new BusinessException(ErrorCode.NO_FUNCTION_PERM, "无功能权限: " + fp.getPointName());
+                        "接口未登记为 API，默认拒绝: " + request.getMethod() + " " + path));
+        if (api.getPermissionId() == null
+                || !decisionService.hasPermission(userId, AuthService.ADMIN_SYSTEM_CODE, api.getPermissionId())) {
+            throw new BusinessException(ErrorCode.NO_FUNCTION_PERM, "无功能权限: " + api.getApiName());
         }
         return true;
     }
@@ -84,13 +85,14 @@ public class AuthInterceptor implements HandlerInterceptor {
             return;
         }
         boolean success = ex == null && response.getStatus() < 400;
-        auditService.record(userId, null, AuthService.ADMIN_SYSTEM_CODE,
+        logService.record(userId, null, AuthService.ADMIN_SYSTEM_CODE,
                 request.getMethod() + " " + path,
                 path,
                 request.getQueryString(),
                 request.getRemoteAddr(),
                 success,
-                ex == null ? null : ex.getMessage());
+                ex == null ? null : ex.getMessage(),
+                RequestIdFilter.requestId(request));
     }
 
     private String relativePath(HttpServletRequest request) {

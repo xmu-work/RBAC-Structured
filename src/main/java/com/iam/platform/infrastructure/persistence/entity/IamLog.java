@@ -6,19 +6,24 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 审计日志实体（iam_audit_log）。
+ * 统一日志实体（iam_log）。
  *
- * <p>只追加、永久保存、不可删除。记录每次后端鉴权与操作。
+ * <p>普通操作日志和权限变更日志共用一张只追加表，通过 {@code log_type} 区分。
+ * 权限变更日志额外保存变更前后快照，便于完整追溯。
  */
 @Data
 @Entity
-@Table(name = "iam_audit_log")
-public class IamAuditLog {
+@Table(name = "iam_log")
+public class IamLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "log_id")
     private Long logId;
+
+    /** ACTION：普通操作；PERMISSION_CHANGE：权限变更 */
+    @Column(name = "log_type", nullable = false, length = 32)
+    private String logType;
 
     @Column(name = "user_id")
     private Long userId;
@@ -47,6 +52,15 @@ public class IamAuditLog {
     @Column(name = "detail", columnDefinition = "json")
     private String detail;
 
+    @Column(name = "before_snapshot", columnDefinition = "json")
+    private String beforeSnapshot;
+
+    @Column(name = "after_snapshot", columnDefinition = "json")
+    private String afterSnapshot;
+
     @Column(name = "decision_id", length = 64)
     private String decisionId;
+
+    @Column(name = "request_id", length = 64)
+    private String requestId;
 }
