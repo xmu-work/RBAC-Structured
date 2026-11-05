@@ -1,13 +1,15 @@
 package com.iam.platform.application.decision;
 
-import com.iam.platform.application.grant.GrantService;
 import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
 import com.iam.platform.common.enums.OperationAction;
 import com.iam.platform.common.enums.RoleType;
 import com.iam.platform.infrastructure.persistence.entity.IamRole;
 import com.iam.platform.infrastructure.persistence.entity.IamUserRole;
-import com.iam.platform.infrastructure.persistence.repository.*;
+import com.iam.platform.infrastructure.persistence.repository.IamRolePermissionRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamRoleRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamUserRepository;
+import com.iam.platform.infrastructure.persistence.repository.IamUserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,8 +29,8 @@ import java.util.stream.Collectors;
  * 对应功能权限查询与判定。
  *
  * <p>RBAC 判定链：用户正常 → 有效用户-角色绑定（未回收、在有效期内）→ 有效角色（含父角色继承）
- * → 角色-功能绑定（allowed_action 覆盖功能点声明的操作）→ 功能点属于该子系统且系统/模块/功能点均启用。
- * 角色→功能点的候选由单条 join 查询一次性取得，避免多轮查库。
+ * → 角色-前端权限绑定（allowed_action 覆盖权限声明的操作）→ 权限属于该子系统且均启用。
+ * 角色→权限的候选由单条 join 查询一次性取得，避免多轮查库。
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -38,39 +40,39 @@ public class DecisionService {
     private final IamUserRepository userRepository;
     private final IamUserRoleRepository userRoleRepository;
     private final IamRoleRepository roleRepository;
-    private final IamRoleFunctionRepository roleFunctionRepository;
+    private final IamRolePermissionRepository rolePermissionRepository;
 
     /**
-     * 功能权限判定。
+     * 前端权限判定。
      *
      * @param userId     用户 ID
      * @param systemCode 子系统编码
-     * @param functionPointId 功能点 ID
+     * @param permissionId 前端菜单/按钮权限 ID
      * @return 允许返回 true
      */
     @Transactional(readOnly = true)
-    public boolean hasPermission(Long userId, String systemCode, Long functionPointId) {
-        return getUserFunctionPoints(userId, systemCode).contains(functionPointId);
+    public boolean hasPermission(Long userId, String systemCode, Long permissionId) {
+        return getUserPermissions(userId, systemCode).contains(permissionId);
     }
 
     /**
      * 批量功能权限判定：只计算一次用户权限集合，再逐个比对。
      */
     @Transactional(readOnly = true)
-    public PermissionCheckResult checkPermissions(Long userId, String systemCode, List<Long> functionPointIds) {
-        Set<Long> granted = getUserFunctionPoints(userId, systemCode);
+    public PermissionCheckResult checkPermissions(Long userId, String systemCode, List<Long> permissionIds) {
+        Set<Long> granted = getUserPermissions(userId, systemCode);
         PermissionCheckResult result = new PermissionCheckResult();
-        for (Long id : functionPointIds) {
+        for (Long id : permissionIds) {
             result.getResults().put(id, granted.contains(id));
         }
         return result;
     }
 
     /**
-     * 查询用户在某子系统下已授权的功能点 ID 集合。
+     * 查询用户在某子系统下已授权的前端权限 ID 集合。
      */
     @Transactional(readOnly = true)
-    public Set<Long> getUserFunctionPoints(Long userId, String systemCode) {
+    public Set<Long> getUserPermissions(Long userId, String systemCode) {
         // 1. 用户必须存在且为正常状态
         boolean userNormal = userRepository.findById(userId)
                 .filter(u -> u.getIsDeleted() == 0 && AccountStatus.NORMAL.getCode().equals(u.getAccountStatus()))
@@ -85,17 +87,17 @@ public class DecisionService {
             return Set.of();
         }
 
-        // 3. 单条 join 查询取候选功能点（已按系统/模块/功能点启用过滤），并合并 allowed_action 覆盖判定
+        // 3. 单条 join 查询取候选权限（已按系统/权限启用过滤），并合并 allowed_action 覆盖判定
         Set<Long> granted = new HashSet<>();
-        for (IamRoleFunctionRepository.GrantedPointView view
-                : roleFunctionRepository.findGrantedPoints(roleIds, systemCode)) {
+        for (IamRolePermissionRepository.GrantedPermissionView view
+                : rolePermissionRepository.findGrantedPermissions(roleIds, systemCode)) {
             OperationAction allowed = parseAction(view.getAllowedAction());
             if (allowed == null || allowed == OperationAction.NONE) {
                 continue;
             }
             OperationAction required = parseAction(view.getRequiredAction());
             if (required != null && allowed.covers(required)) {
-                granted.add(view.getFunctionPointId());
+                granted.add(view.getPermissionId());
             }
         }
         return granted;
@@ -106,7 +108,7 @@ public class DecisionService {
      */
     private Set<Long> activeRoleIds(Long userId) {
         LocalDateTime now = LocalDateTime.now();
-        Set<Long> directRoleIds = userRoleRepository.findByUserIdAndStatus(userId, GrantService.GRANT_ACTIVE).stream()
+        Set<Long> directRoleIds = userRoleRepository.findByUserIdAndStatus(userId, RoleService.GRANT_ACTIVE).stream()
                 .filter(ur -> isEffective(ur, now))
                 .map(IamUserRole::getRoleId)
                 .collect(Collectors.toSet());

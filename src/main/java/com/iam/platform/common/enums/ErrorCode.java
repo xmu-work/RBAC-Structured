@@ -33,7 +33,6 @@ public enum ErrorCode {
     APP_DISABLED(2011, "业务系统接入已停用", 403),
 
     // 3xxx 业务规则
-    ROLE_MUTEX_CONFLICT(3001, "角色互斥冲突", 409),
     ROLE_INHERIT_CYCLE(3002, "角色继承成环", 409),
     ORG_MOVE_INVALID(3003, "组织节点移动非法", 409),
     USER_ALREADY_SEALED(3004, "用户已封存", 409),

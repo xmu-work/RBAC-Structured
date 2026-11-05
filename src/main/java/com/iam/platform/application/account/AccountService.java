@@ -1,7 +1,7 @@
 package com.iam.platform.application.account;
 
 import com.iam.platform.application.auth.AuthService;
-import com.iam.platform.application.grant.GrantService;
+import com.iam.platform.application.role.RoleService;
 import com.iam.platform.common.enums.AccountStatus;
 import com.iam.platform.common.enums.ErrorCode;
 import com.iam.platform.common.exception.BusinessException;
@@ -33,7 +33,7 @@ public class AccountService {
     private final IamUserRepository userRepository;
     private final CryptoComponent cryptoComponent;
     private final AuthService authService;
-    private final GrantService grantService;
+    private final RoleService roleService;
 
     @Value("${iam.default-password:Iam@123456}")
     private String defaultPassword;
@@ -98,6 +98,11 @@ public class AccountService {
      */
     @Transactional
     public IamUser changeStatus(Long userId, String targetStatus, String reason) {
+        return changeStatus(userId, targetStatus, reason, null);
+    }
+
+    @Transactional
+    public IamUser changeStatus(Long userId, String targetStatus, String reason, Long operatorId) {
         AccountStatus target = AccountStatus.fromCode(targetStatus);
         IamUser user = getUser(userId);
         if (AccountStatus.SEALED.getCode().equals(user.getAccountStatus())) {
@@ -112,7 +117,7 @@ public class AccountService {
         }
         if (target == AccountStatus.SEALED) {
             user.setLeaveTime(now);
-            grantService.revokeAllRoles(userId);
+            roleService.revokeAllRoles(userId, operatorId);
         }
         log.info("账号状态变更: userId={}, status={}, reason={}", userId, target.getCode(), reason);
         return userRepository.save(user);

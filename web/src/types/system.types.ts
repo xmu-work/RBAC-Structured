@@ -19,11 +19,16 @@ export interface SystemCreatePayload {
   description?: string
 }
 
-export interface Module {
+/** 前端菜单/按钮权限节点。 */
+export interface Permission {
   id: number
   systemId: number
-  moduleCode: string
-  moduleName: string
+  parentId?: number
+  permissionCode: string
+  permissionName: string
+  permissionType: 'MENU' | 'BUTTON'
+  routePath?: string
+  action: OperationActionCode
   sortNo: number
   status: CommonStatusCode
   isDeleted: number
@@ -31,49 +36,52 @@ export interface Module {
   updatedAt: string
 }
 
-export interface ModuleCreatePayload {
+export interface PermissionCreatePayload {
   systemId: number
-  moduleCode: string
-  moduleName: string
+  parentId?: number
+  permissionCode: string
+  permissionName: string
+  permissionType: 'MENU' | 'BUTTON'
+  routePath?: string
+  action: OperationActionCode
   sortNo?: number
 }
 
-export interface FunctionPoint {
+/** 后端 API 独立实体。permissionId 指向其所属菜单/按钮权限。 */
+export interface Api {
   id: number
-  moduleId: number
-  pointCode: string
-  pointName: string
-  action: OperationActionCode
-  apiPath?: string
-  apiMethod?: string
+  systemId: number
+  permissionId?: number
+  apiCode: string
+  apiName: string
+  apiPath: string
+  httpMethod: string
   status: CommonStatusCode
   isDeleted: number
   createdAt: string
   updatedAt: string
 }
 
-export interface FunctionPointCreatePayload {
-  moduleId: number
-  pointCode: string
-  pointName: string
-  action: OperationActionCode
-  apiPath?: string
-  apiMethod?: string
+export interface ApiCreatePayload {
+  systemId: number
+  apiCode: string
+  apiName: string
+  apiPath: string
+  httpMethod: string
 }
 
-/** 角色-功能点绑定记录（后端 IamRoleFunction 直出） */
-export interface RoleFunction {
+/** 角色-前端权限绑定记录。 */
+export interface RolePermission {
   id: number
   roleId: number
-  functionPointId: number
+  permissionId: number
   allowedAction: OperationActionCode
   createdAt: string
   createdBy?: number
 }
 
-export interface RoleFunctionBindPayload {
+export interface RolePermissionBindPayload {
   roleId: number
-  functionPointIds: number[]
+  permissionIds: number[]
   allowedAction: OperationActionCode
-  createdBy?: number
 }

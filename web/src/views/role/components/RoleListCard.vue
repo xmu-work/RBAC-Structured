@@ -4,7 +4,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { listRoles } from '@/api/role.api'
 import { useDict } from '@/composables/useDict'
 import type { Role } from '@/types/role.types'
-import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { ADMIN_ACTION_PERMISSIONS as FP } from '@/constants/permissions'
 import { dateTimeColumnFormatter } from '@/utils/time'
 
 /**
@@ -60,7 +60,7 @@ defineExpose({ reload: loadRoles })
       <div class="role-list-card__header">
         <div>
           <h2 class="role-list-card__title">角色列表</h2>
-          <p class="role-list-card__hint">全量 {{ roles.length }} 个 · 点击行查看详情与互斥配置</p>
+          <p class="role-list-card__hint">全量 {{ roles.length }} 个 · 点击行查看详情</p>
         </div>
         <el-button v-perm="FP.ROLE_CREATE" type="primary" :icon="Plus" @click="emit('create')">新建角色</el-button>
       </div>

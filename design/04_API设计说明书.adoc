@@ -54,7 +54,7 @@
 * 除 `POST /auth/login` 外，所有接口必须携带请求头 `Authorization: Bearer {accessToken}`。
 * 每个请求由拦截器依次执行：
 . *认证*：校验令牌签名、签发方、有效期，并确认令牌未被吊销。失败返回 401（2001～2004）。
-. *鉴权*：若当前接口（Controller 映射模板 + HTTP 方法，如 `PUT /users/{userId}/status`）已在 `iam_function_point` 中登记为 `ADMIN` 系统的功能点，则要求当前用户经角色拥有该功能点，否则返回 403（2007）。未登记的接口只要求登录。
+. *鉴权*：管理端请求必须匹配 `iam_api(api_path, http_method)`，再通过其 `permission_id` 检查用户角色是否拥有对应前端权限。API 未登记、未映射权限或权限未授予均返回 403（2007）。
 * 初始化数据 `seed.sql` 已把第 3 章全部已实现的管理端接口登记为功能点，并授予超级管理员角色 `SUPER_ADMIN`；默认管理员 `admin / Admin@123`。
 
 === 1.3 统一响应包
@@ -129,7 +129,6 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 
 | 2009～2011 | SIGNATURE_INVALID / REPLAY_DETECTED / APP_DISABLED | 401 / 401 / 403 | 对外签名、防重放、接入停用 | 扩展
 
-| 3001 | ROLE_MUTEX_CONFLICT | 409 | 角色互斥冲突 | RBAC3
 
 | 3002 | ROLE_INHERIT_CYCLE | 409 | 角色继承成环 | RBAC1
 
@@ -177,24 +176,25 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 | POST | `/roles` | 新建角色 | 已实现
 | GET | `/roles` | 角色列表 | 已实现
 | GET | `/roles/{roleId}` | 角色详情 | 已实现
-| POST | `/roles/grants` | 为用户授予角色 | 已实现
-| DELETE | `/roles/grants` | 撤销用户角色 | 已实现
-| GET | `/roles/grants/{userId}` | 查询用户的角色绑定 | 已实现
+| POST | `/roles/{roleId}/assignments` | 将角色分配给用户 | 已实现
+| DELETE | `/roles/{roleId}/assignments/{userId}` | 撤销用户角色 | 已实现
+| GET | `/roles/{roleId}/assignments` | 查询角色下的用户分配 | 已实现
+| GET | `/roles/assignments` | 按用户查询角色分配 | 已实现
+| POST / DELETE / GET | `/roles/{roleId}/permissions` | 角色前端权限授予 / 解除 / 查询 | 已实现
 | POST | `/systems` | 登记接入系统 | 已实现
 | GET | `/systems` | 系统列表 | 已实现
-| POST | `/systems/modules` | 登记模块 | 已实现
-| POST | `/systems/function-points` | 登记功能点 | 已实现
-| POST | `/systems/role-functions` | 为角色绑定功能点 | 已实现
-| DELETE | `/systems/role-functions` | 解绑角色功能点 | 已实现
-| GET | `/systems/role-functions/{roleId}` | 查询角色已绑定的功能点 | 已实现
-| GET | `/open/authorize` | 单点权限判定 | 已实现
-| POST | `/open/authorize/batch` | 批量权限判定 | 已实现
-| GET | `/open/permissions` | 查询用户在某系统的功能点集合 | 已实现
-| POST / GET | `/roles/{roleId}/exclusions` | 配置 / 查询角色互斥 | RBAC3（待实现）
+| GET / POST | `/permissions` | 查询 / 登记前端菜单与按钮权限树 | 已实现
+| POST / DELETE | `/permissions/{permissionId}/apis/{apiId}` | 绑定 / 解除 API 到前端权限 | 已实现
+| GET | `/permissions/{permissionId}/apis` | 查询前端权限下的 API | 已实现
+| GET / POST | `/apis` | 后端 API 列表 / 登记 | 已实现
+| GET | `/apis/{apiId}` | 后端 API 详情 | 已实现
+| GET | `/open/authorize` | 按 `apiId` 做单点后端鉴权 | 已实现
+| POST | `/open/authorize/batch` | 按 `apiIds` 批量后端鉴权 | 已实现
+| GET | `/open/permissions` | 查询用户在某系统的前端权限集合 | 已实现
 | POST / GET | `/systems/data-scopes` | 创建 / 查询数据范围 | RBAC3（待实现）
 | POST | `/systems/role-data-scopes` | 为角色绑定数据范围 | RBAC3（待实现）
-| POST / GET / PUT | `/orgs`、`/orgs/{orgId}`、`/orgs/{orgId}/children`、`/orgs/{orgId}/move` | 组织机构（新建、树、详情、下级、移动） | 已实现
-| GET | `/audit-logs` | 审计日志查询 | RBAC3（待实现）
+| POST / GET / PUT | `/organizations`、`/organizations/{orgId}`、`/organizations/{orgId}/children`、`/organizations/{orgId}/parent` | 分层组织（新建、树、详情、下级、移动） | 已实现
+| GET | `/logs` | 统一日志查询（普通操作 + 权限变更） | 已实现
 |===
 
 "待实现"接口的 Controller 与签名已定义，调用时返回 500；参数见第 5 章。
@@ -287,14 +287,20 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 
 | `GET /roles/{roleId}` | — | 角色详情 | 1005
 
-| `POST /roles/grants` | `userId`、`roleId`；可选 `expireTime`、`grantBy`、`grantReason` | 为用户授予角色，返回绑定记录（`status = ACTIVE`）。撤销后再次授予会复用原记录 | 1005 用户或角色不存在；3010 用户非正常状态；1001 角色已停用或失效时间早于当前；3005 重复授权
+| `POST /roles/{roleId}/assignments` | `userId`；可选 `expireTime`、`grantReason` | 把角色分配给用户，返回绑定记录（`status = ACTIVE`）。撤销后再次授予会复用原记录 | 1005 用户或角色不存在；3010 用户非正常状态；1001 角色已停用或失效时间早于当前；3005 重复授权
 
-| `DELETE /roles/grants` | `userId`、`roleId` | 撤销用户角色，绑定置为 `REVOKED`，下一次请求起失去对应权限 | 1005 未授予该角色
+| `DELETE /roles/{roleId}/assignments/{userId}` | — | 撤销用户角色，绑定置为 `REVOKED`，下一次请求起失去对应权限 | 1005 未授予该角色
 
-| `GET /roles/grants/{userId}` | — | 用户的全部角色绑定（含已回收） | —
+| `GET /roles/{roleId}/assignments` / `GET /roles/assignments?userId=` | — | 查询角色下的用户分配 / 查询用户的全部角色绑定 | —
+
+| `POST /roles/{roleId}/permissions` | query：`allowedAction`；请求体：权限 ID 数组 | 给角色授予前端菜单/按钮权限 | 1005 角色或权限不存在；1001 操作取值非法
+
+| `DELETE /roles/{roleId}/permissions` | 请求体：权限 ID 数组 | 解除角色前端权限，未绑定的忽略 | —
+
+| `GET /roles/{roleId}/permissions` | — | 查询角色已绑定的前端权限 | —
 |===
 
-=== 3.4 系统与功能权限（M05）
+=== 3.4 多系统、前端权限与后端 API
 
 [cols="1,2,3,2"]
 |===
@@ -304,15 +310,21 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 
 | `GET /systems` | — | 未删除的系统列表 | —
 
-| `POST /systems/modules` | `systemId`、`moduleCode`、`moduleName`；可选 `sortNo` | 登记模块 | 1005 系统不存在
+| `GET /systems/{systemId}` | — | 系统详情 | 1005
 
-| `POST /systems/function-points` | `moduleId`、`pointCode`、`pointName`、`action`；可选 `apiPath`、`apiMethod` | 登记功能点。`apiPath` 写 Controller 映射模板（如 `/users/{userId}`），`apiMethod` 自动转大写；登记后该接口即受鉴权保护 | 1005 模块不存在；1001 操作取值非法；3009 API 已登记
+| `POST /permissions` | `systemId`、`permissionCode`、`permissionName`、`permissionType`（MENU/BUTTON）、`action`；可选 `parentId`、`routePath`、`sortNo` | 登记前端权限树节点；菜单和按钮共用一张自关联树 | 1005 系统/父权限不存在；1001 类型或操作非法；3009 编码已存在
 
-| `POST /systems/role-functions` | query：`roleId`、`allowedAction`，可选 `createdBy`；*请求体*：功能点 ID 数组，如 `[20001, 20002]` | 为角色绑定功能点，已绑定的自动跳过 | 1005 角色不存在 / 已停用 / 功能点不存在；1001 操作取值非法
+| `GET /permissions?systemId=` | — | 查询某系统的菜单/按钮权限树节点 | —
 
-| `DELETE /systems/role-functions` | query：`roleId`；*请求体*：功能点 ID 数组 | 解绑，未绑定的忽略 | —
+| `POST /apis` | `systemId`、`apiCode`、`apiName`、`apiPath`、`httpMethod` | 独立登记后端 API，HTTP 方法转大写 | 1005 系统不存在；3009 编码或请求映射重复
 
-| `GET /systems/role-functions/{roleId}` | — | 角色已绑定的功能点列表 | —
+| `GET /apis?systemId=` / `GET /apis/{apiId}` | — | 查询某系统的 API / API 详情 | 1005
+
+| `POST /permissions/{permissionId}/apis/{apiId}` | — | 把 API 挂到前端权限；同一权限可关联多个 API | 1005 权限/API 不存在；1001 不属于同一系统
+
+| `DELETE /permissions/{permissionId}/apis/{apiId}` | — | 解除映射；未映射 API 运行期默认拒绝 | 1005
+
+| `GET /permissions/{permissionId}/apis` | — | 查询权限关联的全部 API | 1005
 |===
 
 === 3.5 组织机构（M03）
@@ -321,15 +333,15 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 |===
 | 接口 | 参数 | 说明 | 错误
 
-| `GET /orgs` | 可选 `rootId` | 不传：返回顶层组织（下级用 children 接口逐层加载）；传：返回该节点及全部下级的扁平列表 | 1005 rootId 不存在
+| `GET /organizations` | 可选 `rootId` | 不传：返回顶层组织（下级用 children 接口逐层加载）；传：返回该节点及全部下级的扁平列表 | 1005 rootId 不存在
 
-| `GET /orgs/{orgId}` | — | 组织详情 | 1005
+| `GET /organizations/{orgId}` | — | 组织详情 | 1005
 
-| `GET /orgs/{orgId}/children` | — | 直接下级，按排序号排列 | 1005 上级不存在
+| `GET /organizations/{orgId}/children` | — | 直接下级，按排序号排列 | 1005 上级不存在
 
-| `POST /orgs` | `orgCode`、`orgName`、`orgType`（HQ/BRANCH/DEPT/PROJECT）、`orgLevel`（1～4，须与类型对应）；可选 `parentId`、`sortNo` | 新建组织，自动计算祖先路径 `ancestors` | 1001 类型非法 / 层级与类型不符 / 上级层级不高于本节点；1005 上级不存在；3009 编码已存在
+| `POST /organizations` | `orgCode`、`orgName`、`orgType`（HQ/BRANCH/DEPT/PROJECT）、`orgLevel`（1～4，须与类型对应）；可选 `parentId`、`sortNo` | 新建组织，自动计算祖先路径 `ancestors` | 1001 类型非法 / 层级与类型不符 / 上级层级不高于本节点；1005 上级不存在；3009 编码已存在
 
-| `PUT /orgs/{orgId}/move` | `newParentId` | 移动到新上级下，同步更新全部下级的祖先路径 | 1005；3003 移动到自身或下级（成环）、新上级层级不高于本节点（跨级）
+| `PUT /organizations/{orgId}/parent` | `newParentId` | 调整父组织，同步更新全部下级的祖先路径 | 1005；3003 移动到自身或下级（成环）、新上级层级不高于本节点（跨级）
 |===
 
 组织的修改、停用、删除与人数统计尚未提供接口（RBAC3 阶段）。
@@ -359,15 +371,12 @@ HTTP 状态码随业务码变化，见下表（与 `common/enums/ErrorCode.java`
 |===
 | 接口 | 参数 | 需求
 
-| `POST /roles/{roleId}/exclusions` | `excludedRoleId`；可选 `reason` | FR-14
-| `GET /roles/{roleId}/exclusions` | — | FR-14
 | `POST /systems/data-scopes` | `scopeCode`、`scopeName`；可选 `description`、`sortNo` | FR-22
 | `GET /systems/data-scopes` | — | FR-22
 | `POST /systems/role-data-scopes` | `roleId`、`scopeType`；可选 `orgId`、`projectId`、`createdBy` | FR-22、FR-23
-| `GET /audit-logs` | 可选 `page`、`size`、`userId`、`systemCode`、`startTime`、`endTime` | FR-45
 |===
 
-实现时同步：返回值统一改为 `PageResult` 或视图对象，审计日志字段以《数据库设计说明书》3.13 节为准。
+统一日志 `GET /logs` 已实现，返回 `PageResult<IamLog>`，字段以《数据库设计说明书》第 5 节为准。
 
 == 6 规划接口（扩展，尚未实现）
 
@@ -383,7 +392,7 @@ V1.0 中设计、当前代码尚未实现的能力，保留设计要点作为后
 === 6.2 管理与通知扩展
 
 * 授权申请—审批—执行流程（FR-30）。
-* 批量导入账号、权限矩阵查询与导出、审计日志导出（FR-06、FR-21、FR-46）。
+* 批量导入账号、权限矩阵查询与导出、统一日志导出（FR-06、FR-21、FR-46）。
 * 权限变更回调：平台向业务系统 `callback_url` 推送 `{eventId, eventType, affectedUserIds, affectedSystemCodes, occurredAt}`，消费方按 `eventId` 幂等（FR-43）。
 * 请求追踪 `X-Request-Id` 回传、写接口幂等键 `Idempotency-Key`。
 
@@ -391,7 +400,7 @@ V1.0 中设计、当前代码尚未实现的能力，保留设计要点作为后
 
 * 限流：按用户、IP、调用方系统三个维度，超限返回 429（4001）。
 * 防越权：功能权限防垂直越权（已实现）；数据范围防水平越权，"本人"类权限在服务端用当前登录用户回填过滤条件，不信任前端传入的用户 ID（RBAC3）。
-* 审计：所有写接口及失败操作写入审计日志，字段见《数据库设计说明书》3.13 节（RBAC3）。
+* 日志：普通写接口及失败操作写入 `iam_log`；权限变更同时写入结构化前后快照，统一通过 `/logs` 查询。
 
 == 7 典型调用示例
 
@@ -431,8 +440,8 @@ curl -X POST http://localhost:8080/api/v1/users -H "Authorization: Bearer $TOKEN
   --data-urlencode userNo=zhang --data-urlencode password=Zhang@123 \
   --data-urlencode realName=张三 --data-urlencode phone=13812345678 --data-urlencode orgId=1
 
-curl -X POST http://localhost:8080/api/v1/roles/grants -H "Authorization: Bearer $TOKEN" \
-  -d userId=2 -d roleId=2
+curl -X POST http://localhost:8080/api/v1/roles/2/assignments -H "Authorization: Bearer $TOKEN" \
+  -d userId=2
 ----
 
 [source,json]
@@ -450,8 +459,8 @@ curl -X POST http://localhost:8080/api/v1/roles/grants -H "Authorization: Bearer
 
 === 7.3 鉴权生效过程
 
-. 角色 2 尚未绑定功能点时，用户 zhang 调用 `GET /users` → 403，`{"code": 2007, "message": "无功能权限: 查询用户列表"}`。
-. 管理员调用 `POST /systems/role-functions?roleId=2&allowedAction=VIEW`，请求体 `[20001]`。
+. 角色 2 尚未获得按钮权限时，用户 zhang 调用 `GET /users` → 403。
+. 管理员调用 `POST /roles/2/permissions?allowedAction=VIEW`，请求体 `[20001]`；API 30001（`GET /users`）已映射到权限 20001。
 . zhang 再次调用 `GET /users` → 200；调用 `POST /users` 仍为 403（未绑定 20002）。
 . `GET /open/permissions?userId=2&systemCode=ADMIN` → `[20001]`。
 . 管理员把 zhang 封存（`PUT /users/2/status`，`targetStatus=SEALED`）→ zhang 的令牌立即失效，再请求返回 `{"code": 2004, "message": "令牌已吊销"}`。

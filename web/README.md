@@ -10,7 +10,7 @@ Vue 3（仅 `<script setup>`）+ TypeScript(strict) + Vite 5 + Pinia + Vue Route
 
 ```bash
 pnpm install      # 安装依赖（lock 文件入库）
-pnpm dev          # 启动开发服务（默认 5173，Mock 已开启）
+pnpm dev          # 启动开发服务（默认 5173，请求代理到真实后端）
 pnpm build        # vue-tsc 类型检查 + 生产构建
 pnpm typecheck    # 仅类型检查
 pnpm lint         # ESLint + Stylelint
@@ -22,15 +22,11 @@ pnpm lint         # ESLint + Stylelint
 - 按权限过滤的动态路由、侧边菜单、`v-perm` 元素级权限指令与 60 秒权限同步
 - 主布局、顶栏、面包屑、多页签、403/404/500 页面
 - Pinia 状态层、Axios 契约封装、完整 API/类型目录、分页组合式函数与字典 Store
-- 登录与功能权限相关接口的契约级 Mock
+- 组织、用户、角色、授权、功能权限、统一日志等页面全部连接真实后端
 
-当前组织、用户、角色、授权、功能权限、审计等业务页面已接入路由和 Mock 契约；数据权限页面按项目边界不提供。
+## 后端联调
 
-## Mock / 联调切换
-
-- `web/.env.development` 中 `VITE_USE_MOCK=true`：vite-plugin-mock 按契约附录 B 签名拦截 `/api/v1/*` 并返回契约级数据。
-- Mock 模式下，登录页输入任意非空账号和密码即可进入管理后台。
-- 后端联调时置 `false`：请求经 Vite proxy 至 `http://localhost:8080`。
+前端不包含 Mock 数据或 Mock 插件。开发服务器通过 Vite proxy 将所有 `/api/v1` 请求转发到 `http://localhost:8080`，因此启动前端前必须先启动后端和数据库。
 
 ## 目录契约（契约 2.1）
 

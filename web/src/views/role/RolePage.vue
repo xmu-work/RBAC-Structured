@@ -1,48 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { listRoles } from '@/api/role.api'
+import { ref } from 'vue'
 import RoleListCard from './components/RoleListCard.vue'
 import RoleDetailCard from './components/RoleDetailCard.vue'
-import RoleExclusionCard from './components/RoleExclusionCard.vue'
 import RoleCreateDialog from './components/RoleCreateDialog.vue'
-import RoleExclusionDialog from './components/RoleExclusionDialog.vue'
-import type { Role, RoleExclusion } from '@/types/role.types'
 
-/** 左列表 + 右（详情/互斥）的角色管理主页（契约 8.5）：本组件只负责布局与协同 */
+/** 左列表 + 右详情的角色管理主页。 */
 const selectedRoleId = ref<number | null>(null)
-const selectedRole = ref<Role | null>(null)
-const allRoles = ref<Role[]>([])
-const excludedIds = ref<number[]>([])
 const listReloadSignal = ref(0)
-const exclusionReloadSignal = ref(0)
 
 const createDialogVisible = ref(false)
-const exclusionDialogVisible = ref(false)
-
-onMounted(() => {
-  void listRoles().then((roles) => {
-    allRoles.value = roles
-  })
-})
 
 function handleSelect(roleId: number): void {
   selectedRoleId.value = roleId
 }
 
-function handleDetailLoaded(role: Role): void {
-  selectedRole.value = role
-}
-
-function handleExclusionsLoaded(list: RoleExclusion[]): void {
-  excludedIds.value = list.map((item) => item.excludedRoleId)
-}
-
 function handleRoleCreated(): void {
   listReloadSignal.value += 1
-}
-
-function handleExclusionAdded(): void {
-  exclusionReloadSignal.value += 1
 }
 </script>
 
@@ -56,22 +29,9 @@ function handleExclusionAdded(): void {
       @create="createDialogVisible = true"
     />
     <div class="role-page__aside">
-      <RoleDetailCard :role-id="selectedRoleId" @loaded="handleDetailLoaded" />
-      <RoleExclusionCard
-        :role-id="selectedRoleId"
-        :reload-signal="exclusionReloadSignal"
-        @add="exclusionDialogVisible = true"
-        @loaded="handleExclusionsLoaded"
-      />
+      <RoleDetailCard :role-id="selectedRoleId" />
     </div>
     <RoleCreateDialog v-model="createDialogVisible" @success="handleRoleCreated" />
-    <RoleExclusionDialog
-      v-model="exclusionDialogVisible"
-      :role="selectedRole"
-      :roles="allRoles"
-      :excluded-role-ids="excludedIds"
-      @success="handleExclusionAdded"
-    />
   </div>
 </template>
 

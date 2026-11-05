@@ -5,6 +5,7 @@ import com.iam.platform.application.account.UserView;
 import com.iam.platform.common.result.PageResult;
 import com.iam.platform.common.result.Result;
 import com.iam.platform.infrastructure.persistence.entity.IamUser;
+import com.iam.platform.interfaces.AuthInterceptor;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -72,7 +73,9 @@ public class UserController {
     @PutMapping("/{userId}/status")
     public Result<UserView> changeStatus(@PathVariable Long userId,
                                          @RequestParam @NotBlank String targetStatus,
-                                         @RequestParam(required = false) @Size(max = 255) String reason) {
-        return Result.success(accountService.toView(accountService.changeStatus(userId, targetStatus, reason)));
+                                         @RequestParam(required = false) @Size(max = 255) String reason,
+                                         @RequestAttribute(AuthInterceptor.ATTR_USER_ID) Long operatorId) {
+        return Result.success(accountService.toView(
+                accountService.changeStatus(userId, targetStatus, reason, operatorId)));
     }
 }

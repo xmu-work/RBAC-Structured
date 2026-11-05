@@ -112,8 +112,6 @@ function handleBusinessError(body: Result, silent = false, isLogin = false): Pro
         ElMessage.error(`${message}，请联系管理员`)
       }
       return rejectWith(code, message)
-    case 3001: // 角色互斥冲突：契约 4.6 规定由页面局部弹窗点名冲突角色（UC-05），拦截器不重复 toast
-      return rejectWith(code, message)
     default:
       // 1001/1002/1003/1005/2007/2008/3003/3004/3005/3007/3009/3010 等：toast 后端 message 原文（契约 9.2-7）
       // 需自定义展示的场景（表单 1001 回填、3003 还原拖拽）由页面局部 catch 处理
@@ -172,17 +170,17 @@ export function postForm<T>(url: string, params?: object): Promise<T> {
   return request.post(url, null, { params }) as Promise<T>
 }
 
-/** PUT + query 参数（如 /users/{id}/status、/orgs/{id}/move） */
+/** PUT + query 参数（如 /users/{id}/status、/organizations/{id}/parent） */
 export function putForm<T>(url: string, params?: object): Promise<T> {
   return request.put(url, null, { params }) as Promise<T>
 }
 
-/** DELETE + query 参数（如 /roles/grants 回收授权） */
+/** DELETE + query 参数 */
 export function deleteForm<T>(url: string, params?: object): Promise<T> {
   return request.delete(url, { params }) as Promise<T>
 }
 
-/** DELETE + JSON Body（如 /systems/role-functions 解绑：roleId 走 query，功能点 ID 数组走 Body） */
+/** DELETE + JSON Body */
 export function deleteJson<T>(url: string, data?: unknown, params?: object): Promise<T> {
   return request.delete(url, { params, data }) as Promise<T>
 }

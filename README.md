@@ -1,12 +1,12 @@
 # 统一应用软件权限管理系统（IAM）
 
-基于 RBAC 模型的企业统一身份与**功能权限**管理平台。系统集中管理账号、组织、角色、功能点与角色授权，并通过 OpenAPI 为接入系统提供功能权限查询和判定。
+基于 RBAC 模型的企业统一身份与**功能权限**管理平台。系统集中管理多系统、前端菜单/按钮权限、后端 API、账号、组织、角色与授权，并通过 OpenAPI 为接入系统提供权限查询和判定。
 
 ## 项目边界
 
 本项目**只实现功能权限，不实现数据权限**。
 
-- “能访问哪个菜单、页面、按钮和 API”由功能角色、功能点及 `allowed_action` 决定。
+- “能访问哪个菜单、页面和按钮”由角色与前端权限树决定；“能调用哪个后端 API”再由 API 到权限的映射独立校验。
 - “能查看哪个分公司、部门、项目或本人的数据”不在本项目范围内。
 - 组织机构仍作为账号归属和人员管理的主数据，不承担数据权限判定。
 - 角色只有功能角色一种类型，不提供数据角色或数据范围授权。
@@ -40,30 +40,31 @@
 - 组织机构树、详情、子节点、新建和节点移动。
 - 功能角色创建、详情和列表。
 - 角色继承链在权限判定时生效。
-- 角色互斥配置与授予前冲突校验。
+- 角色生命周期、用户角色分配和角色权限分配统一由 `RoleService` 承载。
 
 ### 功能权限
 
-- 子系统、模块和功能点登记。
-- 角色与功能点批量绑定、解绑和查询。
-- 功能点操作动作校验，判定时要求 `allowed_action` 覆盖功能点声明的动作。
-- 系统、模块、功能点和角色状态参与判定。
-- 单点、批量和权限集合查询。
+- 多系统登记；每个系统拥有独立的前端权限树与后端 API 目录。
+- 菜单和按钮共用 `iam_permission` 自关联树，`MENU/BUTTON` 区分节点类型。
+- 后端 `iam_api` 独立建模，通过 `permission_id` 映射到前端权限；一个权限可映射多个 API。
+- 角色与前端权限批量绑定、解绑和查询；系统、权限、角色和账号状态参与判定。
+- 单 API、批量 API 和前端权限集合查询。
 
 ### 授权与安全
 
 - 用户角色授予、撤销和查询，支持授权有效期。
 - 管理员不能授予超出自身功能权限的角色。
-- 未登记的管理端 API 默认拒绝（fail-closed）。
+- 按请求定位 API 后，再检查 API 所属权限是否授予；未登记或未映射权限的 API 默认拒绝（fail-closed）。
 - OpenAPI 支持接入方 HMAC 签名、时间戳、nonce 防重放；普通用户令牌只能查询本人。
 - 关键请求参数校验、分页上限、批量上限、唯一约束和乐观锁。
 - 写请求支持 `Idempotency-Key`，请求指纹包含调用者、参数和请求体。
 - 支持 `X-Request-Id` 回写、统一响应 `requestId` 和日志关联。
 
-### 审计与缓存
+### 统一日志与缓存
 
-- 权限变更写操作记录审计日志，操作人取自服务端认证上下文。
-- 审计日志分页查询。
+- 普通操作日志和权限变更日志统一保存在 `iam_log`，通过 `log_type` 区分。
+- 权限授予、回收、角色权限绑定/解绑记录变更前后 JSON 快照。
+- 统一日志分页查询，支持按用户、系统、日志类型和时间范围过滤。
 - 权限缓存使用版本号失效，不使用 Redis `KEYS` 扫描。
 - 分布式锁使用 owner token 与原子解锁。
 
@@ -96,13 +97,15 @@ RBAC-Structured/
 └── design/                详细设计与接口设计材料
 ```
 
-数据库当前包含 12 张表，核心模型为：
+数据库核心模型为：
 
 ```text
-用户 -> 用户-角色 -> 角色 -> 角色-功能点 -> 功能点 <- 模块 <- 子系统
+多系统 1:N 前端权限树 1:N 后端 API
+用户 M:N 角色 M:N 前端权限
+分层组织 1:N 用户
 ```
 
-组织树、角色互斥、令牌、审计日志和权限变更日志为辅助模型。
+普通操作与权限变更统一保存在 `iam_log`；统一日志、令牌等技术支撑表不属于 RBAC 核心 E-R 图。角色互斥不再建模。
 
 ## 快速开始
 
@@ -162,13 +165,13 @@ pnpm typecheck
 pnpm build
 ```
 
-前端通过 Vite 代理访问后端；Mock 开关和代理配置见 `web/README.md`。
+前端通过 Vite 代理访问真实后端；不包含 Mock 插件、Mock 数据或 Mock 开关。
 
 ## 鉴权规则
 
 - `POST /auth/login` 为公开接口。
 - 管理端请求携带 `Authorization: Bearer <token>`。
-- 管理端 API 必须已登记为功能点，否则默认拒绝。
+- 管理端请求必须先匹配已登记的 `iam_api`，再检查该 API 映射的前端权限；任一环节缺失都默认拒绝。
 - OpenAPI 可携带 `X-App-Id`、`X-Timestamp`、`X-Nonce`、`X-Signature` 进行接入方认证。
 - OpenAPI 普通用户令牌只能查询本人；接入方签名可查询授权范围内的用户。
 - 只有功能权限判定，不接受目标组织、项目或资源上下文作为数据权限输入。
@@ -184,27 +187,30 @@ pnpm build
 | GET/POST | `/api/v1/users` | 用户分页查询 / 创建 |
 | GET | `/api/v1/users/{userId}` | 用户详情 |
 | PUT | `/api/v1/users/{userId}/status` | 变更账号状态 |
-| GET/POST | `/api/v1/orgs` | 组织树 / 新建组织 |
-| GET | `/api/v1/orgs/{orgId}` | 组织详情 |
-| GET | `/api/v1/orgs/{orgId}/children` | 下级组织 |
-| PUT | `/api/v1/orgs/{orgId}/move` | 移动组织 |
+| GET/POST | `/api/v1/organizations` | 组织树 / 新建组织 |
+| GET | `/api/v1/organizations/{orgId}` | 组织详情 |
+| GET | `/api/v1/organizations/{orgId}/children` | 下级组织 |
+| PUT | `/api/v1/organizations/{orgId}/parent` | 调整父组织 |
 | GET/POST | `/api/v1/roles` | 角色列表 / 新建功能角色 |
 | GET | `/api/v1/roles/{roleId}` | 角色详情 |
-| POST/GET | `/api/v1/roles/{roleId}/exclusions` | 配置 / 查询角色互斥 |
-| POST/DELETE | `/api/v1/roles/grants` | 授予 / 撤销用户角色 |
-| GET | `/api/v1/roles/grants/{userId}` | 查询用户角色 |
+| POST | `/api/v1/roles/{roleId}/assignments` | 将角色分配给用户 |
+| DELETE | `/api/v1/roles/{roleId}/assignments/{userId}` | 撤销用户角色 |
+| GET | `/api/v1/roles/{roleId}/assignments` | 查询角色下的用户分配 |
+| GET | `/api/v1/roles/assignments` | 按用户查询角色分配 |
+| POST/DELETE/GET | `/api/v1/roles/{roleId}/permissions` | 角色权限授予 / 解除 / 查询 |
 | GET/POST | `/api/v1/systems` | 子系统列表 / 登记 |
-| POST | `/api/v1/systems/modules` | 登记模块 |
-| POST | `/api/v1/systems/function-points` | 登记功能点 |
-| POST/DELETE | `/api/v1/systems/role-functions` | 绑定 / 解绑角色功能点 |
-| GET | `/api/v1/systems/role-functions/{roleId}` | 查询角色功能点 |
-| GET | `/api/v1/open/authorize` | 单点功能权限判定 |
-| POST | `/api/v1/open/authorize/batch` | 批量功能权限判定 |
-| GET | `/api/v1/open/permissions` | 查询用户功能点集合 |
-| GET | `/api/v1/audit-logs` | 审计日志分页查询 |
+| GET/POST | `/api/v1/permissions` | 前端权限树查询 / 登记 |
+| POST/DELETE | `/api/v1/permissions/{permissionId}/apis/{apiId}` | 绑定 / 解除 API 映射 |
+| GET | `/api/v1/permissions/{permissionId}/apis` | 查询权限下的 API |
+| GET/POST | `/api/v1/apis` | 后端 API 列表 / 登记 |
+| GET | `/api/v1/apis/{apiId}` | 后端 API 详情 |
+| GET | `/api/v1/open/authorize` | 按 `apiId` 做单点后端鉴权 |
+| POST | `/api/v1/open/authorize/batch` | 按 `apiIds` 批量后端鉴权 |
+| GET | `/api/v1/open/permissions` | 查询用户前端菜单/按钮权限集合 |
+| GET | `/api/v1/logs` | 统一日志分页查询（普通操作 + 权限变更） |
 
 ## 验证状态
 
-当前后端共 97 项测试，全部通过；前端 `pnpm typecheck`、`pnpm build` 和 `pnpm lint` 均通过。测试覆盖认证、账号、组织、角色继承与互斥、功能权限判定、OpenAPI、审计、输入校验、并发冲突、请求追踪和幂等。
+后端共 75 项测试全部通过，覆盖认证、账号、组织、角色分配、权限树、API 映射、鉴权决策、OpenAPI、统一日志、输入校验、并发冲突、请求追踪和幂等；前端通过 `pnpm typecheck`、`pnpm build` 和 `pnpm lint`。
 
 `design/` 目录保留课程详细设计材料；功能范围以本 README 和当前代码为准。

@@ -8,7 +8,7 @@ import { useOrgNames } from '@/composables/useOrgTree'
 import { useTable } from '@/composables/useTable'
 import { AccountStatus, type AccountStatusCode } from '@/constants/enums'
 import type { User } from '@/types/user.types'
-import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { ADMIN_ACTION_PERMISSIONS as FP } from '@/constants/permissions'
 import { formatDateTime } from '@/utils/time'
 
 /**

@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import { listAuditLogs } from '@/api/audit.api'
+import { listLogs } from '@/api/log.api'
 import { listSystems } from '@/api/system.api'
 import { listUsers } from '@/api/user.api'
 import { useTable } from '@/composables/useTable'
 import { dateTimeColumnFormatter, toLocalISO } from '@/utils/time'
 import { DigitalBool } from '@/constants/enums'
-import type { AuditLog } from '@/types/audit.types'
+import type { LogEntry, LogType } from '@/types/log.types'
 import type { System } from '@/types/system.types'
 import type { User } from '@/types/user.types'
 
 /**
- * 审计日志查询卡（契约 8.9 / 9.2-1）：时间范围必填（默认当天），
+ * 统一日志查询卡：时间范围必填（默认当天），
  * 时间参数以 ISO 本地格式传参（契约 3.3）；日志永久保存，无任何删除入口（UC-06）。
  */
 const props = defineProps<{ reloadSignal: number }>()
 
-const emit = defineEmits<{ detail: [log: AuditLog] }>()
+const emit = defineEmits<{ detail: [log: LogEntry] }>()
 
 const users = ref<User[]>([])
 const systems = ref<System[]>([])
@@ -30,6 +30,7 @@ type TimeRange = [string, string]
 const draftTimeRange = ref<TimeRange | null>(defaultRange())
 const draftUserId = ref<number | undefined>(undefined)
 const draftSystemCode = ref('')
+const draftLogType = ref<LogType | undefined>(undefined)
 
 function defaultRange(): TimeRange {
   const today = dayjs()
@@ -41,19 +42,20 @@ const appliedQuery = ref<{
   endTime: string
   userId?: number
   systemCode?: string
+  logType?: LogType
 }>({
   startTime: toLocalISO(dayjs().startOf('day')),
   endTime: toLocalISO(dayjs().endOf('day')),
 })
 
 const fetcher = (params: Record<string, unknown>) =>
-  listAuditLogs({
+  listLogs({
     page: params.page as number,
     size: params.size as number,
     ...appliedQuery.value,
   })
 
-const { rows, total, page, size, loading, error, load } = useTable<AuditLog>(fetcher)
+const { rows, total, page, size, loading, error, load } = useTable<LogEntry>(fetcher)
 
 async function refresh(nextPage = page.value): Promise<void> {
   await load(nextPage)
@@ -68,6 +70,7 @@ function applyQuery(): void {
     endTime: toLocalISO(draftTimeRange.value[1]),
     userId: draftUserId.value,
     systemCode: draftSystemCode.value || undefined,
+    logType: draftLogType.value,
   }
   void refresh(1)
 }
@@ -76,6 +79,7 @@ function resetQuery(): void {
   draftTimeRange.value = defaultRange()
   draftUserId.value = undefined
   draftSystemCode.value = ''
+  draftLogType.value = undefined
   applyQuery()
 }
 
@@ -94,18 +98,18 @@ watch(
   () => void refresh(),
 )
 
-function asLog(row: unknown): AuditLog {
-  return row as AuditLog
+function asLog(row: unknown): LogEntry {
+  return row as LogEntry
 }
 </script>
 
 <template>
-  <!-- 视觉组件（契约 9.1-3）：承载「审计日志查询」这一块视觉区域 -->
+  <!-- 视觉组件：承载「统一日志查询」这一块视觉区域 -->
   <el-card class="audit-card" shadow="never">
     <template #header>
       <div class="audit-card__header">
         <div>
-          <h2 class="audit-card__title">审计日志</h2>
+          <h2 class="audit-card__title">统一日志</h2>
           <p class="audit-card__hint">
             共 {{ total }} 条 · 日志永久保存，不提供删除入口（UC-06）；导出能力待后端补齐
           </p>
@@ -140,6 +144,12 @@ function asLog(row: unknown): AuditLog {
           />
         </el-select>
       </el-form-item>
+      <el-form-item label="日志类型">
+        <el-select v-model="draftLogType" placeholder="全部类型" clearable class="audit-card__type-select">
+          <el-option label="普通操作" value="ACTION" />
+          <el-option label="权限变更" value="PERMISSION_CHANGE" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="时间范围（必填）">
         <el-date-picker
           v-model="draftTimeRange"
@@ -167,6 +177,13 @@ function asLog(row: unknown): AuditLog {
         <template #default="{ row }">{{ asLog(row).username ?? `#${asLog(row).userId ?? '—'}` }}</template>
       </el-table-column>
       <el-table-column prop="action" label="操作" min-width="140" />
+      <el-table-column label="类型" min-width="110">
+        <template #default="{ row }">
+          <el-tag :type="asLog(row).logType === 'PERMISSION_CHANGE' ? 'warning' : 'info'" effect="light">
+            {{ asLog(row).logType === 'PERMISSION_CHANGE' ? '权限变更' : '普通操作' }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="systemCode" label="所属系统" min-width="90">
         <template #default="{ row }">{{ asLog(row).systemCode ?? '—' }}</template>
       </el-table-column>
@@ -238,6 +255,10 @@ function asLog(row: unknown): AuditLog {
 }
 
 .audit-card__system-select {
+  width: 160px;
+}
+
+.audit-card__type-select {
   width: 160px;
 }
 

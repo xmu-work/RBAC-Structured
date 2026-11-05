@@ -1,23 +1,23 @@
 /**
- * 管理后台功能点编码（契约 6.1）。
+ * 管理后台前端权限编码。
  *
- * 与 src/main/resources/db/seed.sql 中 ADMIN 系统登记的 iam_function_point 主键一一对应，
+ * 与 seed.sql 中 ADMIN 系统登记的 iam_permission 主键一一对应，
  * 集中维护可避免页面散落魔法数字。
  */
 
-/** 菜单功能点：L1 路由/菜单控制 */
-export const ADMIN_FUNCTION_POINTS = {
+/** 菜单权限：路由与可见性控制 */
+export const ADMIN_MENU_PERMISSIONS = {
   HOME: 10001,
   ORGANIZATION: 10002,
   USER: 10003,
   ROLE: 10004,
   GRANT: 10005,
   FUNCTION_PERMISSION: 10006,
-  AUDIT: 10008,
+  LOGS: 10008,
 } as const
 
-/** 接口功能点：后端按 API 鉴权的依据，L2 按钮的 v-perm 直接使用（契约 6.1-2） */
-export const ADMIN_API_FUNCTION_POINTS = {
+/** 按钮权限：页面操作控制；后端 API 通过外键映射到这些权限 */
+export const ADMIN_ACTION_PERMISSIONS = {
   USER_LIST: 20001,
   USER_CREATE: 20002,
   USER_GET: 20003,
@@ -25,25 +25,31 @@ export const ADMIN_API_FUNCTION_POINTS = {
   ROLE_LIST: 20005,
   ROLE_CREATE: 20006,
   ROLE_GET: 20007,
-  GRANT_CREATE: 20008,
-  GRANT_REVOKE: 20009,
-  GRANT_LIST: 20010,
+  ROLE_ASSIGN: 20008,
+  ROLE_REVOKE: 20009,
+  ROLE_ASSIGN_LIST: 20010,
   SYSTEM_LIST: 20011,
   SYSTEM_CREATE: 20012,
-  MODULE_CREATE: 20013,
-  FP_CREATE: 20014,
-  ROLE_FP_BIND: 20015,
-  ROLE_FP_UNBIND: 20016,
-  ROLE_FP_LIST: 20017,
+  PERMISSION_CREATE: 20013,
+  API_CREATE: 20014,
+  ROLE_PERMISSION_BIND: 20015,
+  ROLE_PERMISSION_UNBIND: 20016,
+  ROLE_PERMISSION_LIST: 20017,
   ORG_TREE: 20018,
   ORG_CREATE: 20019,
   ORG_GET: 20020,
   ORG_CHILDREN: 20021,
   ORG_MOVE: 20022,
+  PERMISSION_LIST: 20023,
+  API_LIST: 20024,
+  API_PERMISSION_BIND: 20025,
+  API_PERMISSION_UNBIND: 20026,
+  API_PERMISSION_LIST: 20027,
+  LOG_LIST: 20029,
 } as const
 
-export type AdminFunctionPoint = (typeof ADMIN_FUNCTION_POINTS)[keyof typeof ADMIN_FUNCTION_POINTS]
+export type AdminMenuPermission = (typeof ADMIN_MENU_PERMISSIONS)[keyof typeof ADMIN_MENU_PERMISSIONS]
 
-export const ALL_ADMIN_FUNCTION_POINT_IDS = Object.values(ADMIN_FUNCTION_POINTS)
+export const ALL_ADMIN_MENU_PERMISSION_IDS = Object.values(ADMIN_MENU_PERMISSIONS)
 
-export const ALL_ADMIN_API_FUNCTION_POINT_IDS = Object.values(ADMIN_API_FUNCTION_POINTS)
+export const ALL_ADMIN_ACTION_PERMISSION_IDS = Object.values(ADMIN_ACTION_PERMISSIONS)

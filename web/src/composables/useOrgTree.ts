@@ -29,7 +29,7 @@ export function stripChildren(org: Org): OrgTreeNode {
 }
 
 /**
- * 组织树懒加载共享逻辑（契约 8.3）：根层走 GET /orgs，其余走 children 端点。
+ * 组织树懒加载共享逻辑：根层走 GET /organizations，其余走 children 端点。
  * 组织管理树、组织筛选树、组织选择器共用。
  */
 export function useOrgLazyLoad(handlers?: {

@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS iam_org (
     UNIQUE KEY uk_org_code (org_code),
     KEY idx_org_parent (parent_id),
     KEY idx_org_ancestors (ancestors),
-    CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES iam_org (id)
+    CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES iam_org (id),
+    CONSTRAINT chk_org_type CHECK (org_type IN ('HQ', 'BRANCH', 'DEPT', 'PROJECT')),
+    CONSTRAINT chk_org_level CHECK (org_level BETWEEN 1 AND 4)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构';
 
 -- ----------------------------------------------------------
@@ -59,7 +61,8 @@ CREATE TABLE IF NOT EXISTS iam_user (
     UNIQUE KEY uk_user_user_no (user_no),
     KEY idx_user_org (org_id),
     KEY idx_user_status (account_status),
-    CONSTRAINT fk_user_org FOREIGN KEY (org_id) REFERENCES iam_org (id)
+    CONSTRAINT fk_user_org FOREIGN KEY (org_id) REFERENCES iam_org (id),
+    CONSTRAINT chk_user_status CHECK (account_status IN ('NORMAL', 'DISABLED', 'SEALED', 'LOCKED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户';
 
 -- ----------------------------------------------------------
@@ -82,27 +85,12 @@ CREATE TABLE IF NOT EXISTS iam_role (
     PRIMARY KEY (id),
     UNIQUE KEY uk_role_code (role_code),
     KEY idx_role_parent (parent_id),
-    CONSTRAINT fk_role_parent FOREIGN KEY (parent_id) REFERENCES iam_role (id)
+    CONSTRAINT fk_role_parent FOREIGN KEY (parent_id) REFERENCES iam_role (id),
+    CONSTRAINT chk_role_type CHECK (role_type = 'FUNC')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色';
 
 -- ----------------------------------------------------------
--- 4. 角色互斥表
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_role_exclusion (
-    id               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    role_id          BIGINT        NOT NULL COMMENT '角色 A',
-    excluded_role_id BIGINT        NOT NULL COMMENT '互斥角色 B',
-    description      VARCHAR(255)  NULL     COMMENT '互斥原因（如会计与出纳）',
-    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    created_by       BIGINT        NULL     COMMENT '创建人',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_role_excl (role_id, excluded_role_id),
-    CONSTRAINT fk_excl_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
-    CONSTRAINT fk_excl_excluded FOREIGN KEY (excluded_role_id) REFERENCES iam_role (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色互斥（双向落库）';
-
--- ----------------------------------------------------------
--- 5. 用户-角色关联表
+-- 4. 用户-角色关联表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_user_role (
     id             BIGINT       NOT NULL AUTO_INCREMENT,
@@ -120,11 +108,13 @@ CREATE TABLE IF NOT EXISTS iam_user_role (
     UNIQUE KEY uk_user_role (user_id, role_id),
     KEY idx_ur_role (role_id),
     CONSTRAINT fk_ur_user FOREIGN KEY (user_id) REFERENCES iam_user (id),
-    CONSTRAINT fk_ur_role FOREIGN KEY (role_id) REFERENCES iam_role (id)
+    CONSTRAINT fk_ur_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
+    CONSTRAINT chk_user_role_status CHECK (status IN ('ACTIVE', 'EXPIRED', 'REVOKED')),
+    CONSTRAINT chk_user_role_period CHECK (expire_time IS NULL OR effective_time IS NULL OR expire_time > effective_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户-角色关联';
 
 -- ----------------------------------------------------------
--- 6. 接入子系统表
+-- 5. 多系统接入表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_system (
     id           BIGINT       NOT NULL AUTO_INCREMENT,
@@ -140,67 +130,86 @@ CREATE TABLE IF NOT EXISTS iam_system (
     updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     version      BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_system_code (system_code)
+    UNIQUE KEY uk_system_code (system_code),
+    CONSTRAINT chk_system_status CHECK (status IN ('ACTIVE', 'DISABLED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='接入子系统';
 
 -- ----------------------------------------------------------
--- 7. 模块表
+-- 6. 前端菜单/按钮权限树
 -- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_module (
-    id          BIGINT       NOT NULL AUTO_INCREMENT,
-    system_id   BIGINT       NOT NULL,
-    module_code VARCHAR(64)  NOT NULL,
-    module_name VARCHAR(128) NOT NULL,
-    sort_no     INT          NOT NULL DEFAULT 0,
-    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
-    is_deleted  TINYINT      NOT NULL DEFAULT 0,
-    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+CREATE TABLE IF NOT EXISTS iam_permission (
+    id              BIGINT       NOT NULL AUTO_INCREMENT,
+    system_id       BIGINT       NOT NULL,
+    parent_id       BIGINT       NULL COMMENT '父菜单；顶级菜单为 NULL',
+    permission_code VARCHAR(64)  NOT NULL,
+    permission_name VARCHAR(128) NOT NULL,
+    permission_type VARCHAR(16)  NOT NULL COMMENT 'MENU 菜单 / BUTTON 按钮',
+    route_path      VARCHAR(255) NULL COMMENT '前端菜单路由',
+    action          VARCHAR(64)  NOT NULL COMMENT '权限要求的操作',
+    sort_no         INT          NOT NULL DEFAULT 0,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    is_deleted      TINYINT      NOT NULL DEFAULT 0,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_module_code (system_id, module_code),
-    CONSTRAINT fk_module_system FOREIGN KEY (system_id) REFERENCES iam_system (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模块';
+    UNIQUE KEY uk_permission_code (system_id, permission_code),
+    KEY idx_permission_parent (parent_id),
+    CONSTRAINT fk_permission_system FOREIGN KEY (system_id) REFERENCES iam_system (id),
+    CONSTRAINT fk_permission_parent FOREIGN KEY (parent_id) REFERENCES iam_permission (id),
+    CONSTRAINT chk_permission_type CHECK (permission_type IN ('MENU', 'BUTTON')),
+    CONSTRAINT chk_permission_action CHECK (action IN (
+        'NONE', 'VIEW', 'ALL', 'VIEW_EDIT', 'VIEW_ADD', 'VIEW_APPROVE',
+        'VIEW_EXPORT', 'VIEW_EDIT_APPROVE', 'VIEW_ADD_EDIT', 'VIEW_EDIT_EXPORT',
+        'VIEW_SELF', 'VIEW_EDIT_SELF'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='前端菜单/按钮权限树';
 
 -- ----------------------------------------------------------
--- 8. 功能点表
+-- 7. 后端 API 目录
 -- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_function_point (
-    id          BIGINT       NOT NULL AUTO_INCREMENT,
-    module_id   BIGINT       NOT NULL,
-    point_code  VARCHAR(64)  NOT NULL COMMENT '功能点编码',
-    point_name  VARCHAR(128) NOT NULL COMMENT '功能点名称',
-    action      VARCHAR(64)  NOT NULL COMMENT '操作取值（12 种之一）',
-    api_path    VARCHAR(255) NULL     COMMENT 'API 映射模板，如 /users/{userId}',
-    api_method  VARCHAR(16)  NULL     COMMENT 'HTTP 方法',
-    status      VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
-    is_deleted  TINYINT      NOT NULL DEFAULT 0,
-    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+CREATE TABLE IF NOT EXISTS iam_api (
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    system_id     BIGINT       NOT NULL,
+    permission_id BIGINT       NULL COMMENT '所属前端权限；未映射时鉴权默认拒绝',
+    api_code      VARCHAR(64)  NOT NULL,
+    api_name      VARCHAR(128) NOT NULL,
+    api_path      VARCHAR(255) NOT NULL COMMENT 'Controller 映射模板，如 /users/{userId}',
+    http_method   VARCHAR(16)  NOT NULL,
+    status        VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    is_deleted    TINYINT      NOT NULL DEFAULT 0,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_fp_code (module_id, point_code),
-    UNIQUE KEY uk_fp_api (api_path, api_method),
-    CONSTRAINT fk_fp_module FOREIGN KEY (module_id) REFERENCES iam_module (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='功能点';
+    UNIQUE KEY uk_api_code (system_id, api_code),
+    UNIQUE KEY uk_api_request (api_path, http_method),
+    KEY idx_api_permission (permission_id),
+    CONSTRAINT fk_api_system FOREIGN KEY (system_id) REFERENCES iam_system (id),
+    CONSTRAINT fk_api_permission FOREIGN KEY (permission_id) REFERENCES iam_permission (id),
+    CONSTRAINT chk_api_method CHECK (http_method IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后端 API';
 
 -- ----------------------------------------------------------
--- 9. 角色-功能关联表
+-- 8. 角色-前端权限关联表
 -- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_role_function (
-    id                BIGINT      NOT NULL AUTO_INCREMENT,
-    role_id           BIGINT      NOT NULL,
-    function_point_id BIGINT      NOT NULL,
-    allowed_action    VARCHAR(64) NOT NULL COMMENT '授予的操作（12 种之一）',
-    created_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by        BIGINT      NULL,
+CREATE TABLE IF NOT EXISTS iam_role_permission (
+    id             BIGINT      NOT NULL AUTO_INCREMENT,
+    role_id        BIGINT      NOT NULL,
+    permission_id  BIGINT      NOT NULL,
+    allowed_action VARCHAR(64) NOT NULL COMMENT '授予的操作（12 种之一）',
+    created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by     BIGINT      NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_role_fp (role_id, function_point_id),
-    KEY idx_rf_fp (function_point_id),
-    CONSTRAINT fk_rf_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
-    CONSTRAINT fk_rf_fp FOREIGN KEY (function_point_id) REFERENCES iam_function_point (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-功能关联';
+    UNIQUE KEY uk_role_permission (role_id, permission_id),
+    KEY idx_rp_permission (permission_id),
+    CONSTRAINT fk_rp_role FOREIGN KEY (role_id) REFERENCES iam_role (id),
+    CONSTRAINT fk_rp_permission FOREIGN KEY (permission_id) REFERENCES iam_permission (id),
+    CONSTRAINT chk_role_permission_action CHECK (allowed_action IN (
+        'NONE', 'VIEW', 'ALL', 'VIEW_EDIT', 'VIEW_ADD', 'VIEW_APPROVE',
+        'VIEW_EXPORT', 'VIEW_EDIT_APPROVE', 'VIEW_ADD_EDIT', 'VIEW_EDIT_EXPORT',
+        'VIEW_SELF', 'VIEW_EDIT_SELF'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色-前端权限关联';
 
 -- ----------------------------------------------------------
--- 10. 令牌表
+-- 9. 令牌表
 -- ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS iam_token (
     token_id    VARCHAR(64)  NOT NULL COMMENT '令牌唯一标识',
@@ -221,10 +230,11 @@ CREATE TABLE IF NOT EXISTS iam_token (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌';
 
 -- ----------------------------------------------------------
--- 11. 审计日志表
+-- 10. 统一日志表（普通操作日志 + 权限变更日志）
 -- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_audit_log (
+CREATE TABLE IF NOT EXISTS iam_log (
     log_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键，自增',
+    log_type     VARCHAR(32)   NOT NULL COMMENT 'ACTION 普通操作 / PERMISSION_CHANGE 权限变更',
     user_id      BIGINT        NULL     COMMENT '操作人 ID（系统事件可空）',
     username     VARCHAR(128)  NULL     COMMENT '操作人用户名快照（脱敏后）',
     action       VARCHAR(128)  NOT NULL COMMENT '操作内容/动作',
@@ -234,28 +244,17 @@ CREATE TABLE IF NOT EXISTS iam_audit_log (
     ip           VARCHAR(64)   NULL     COMMENT '来源 IP',
     system_code  VARCHAR(64)   NULL     COMMENT '所属系统',
     detail       JSON          NULL     COMMENT '扩展详情（请求参数摘要、拒绝原因等）',
+    before_snapshot JSON       NULL     COMMENT '权限变更前快照',
+    after_snapshot  JSON       NULL     COMMENT '权限变更后快照',
     decision_id  VARCHAR(64)   NULL     COMMENT '鉴权决策 ID，关联决策链路',
+    request_id   VARCHAR(64)   NULL     COMMENT '请求追踪 ID',
     PRIMARY KEY (log_id),
     KEY idx_log_time (operate_time),
-    KEY idx_log_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志（只追加、永久保存）';
-
--- ----------------------------------------------------------
--- 12. 权限变更日志表
--- ----------------------------------------------------------
-CREATE TABLE IF NOT EXISTS iam_permission_change_log (
-    change_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
-    user_id         BIGINT        NULL     COMMENT '受影响用户（角色级变更可空）',
-    role_id         BIGINT        NULL     COMMENT '受影响角色（用户级变更可空）',
-    change_type     VARCHAR(32)   NOT NULL COMMENT '类型：GRANT / REVOKE / SEAL / ROLE_UPDATE',
-    before_snapshot JSON          NULL     COMMENT '变更前快照',
-    after_snapshot  JSON          NULL     COMMENT '变更后快照',
-    operator        BIGINT        NULL     COMMENT '操作人',
-    changed_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
-    remark          VARCHAR(500)  NULL     COMMENT '备注',
-    PRIMARY KEY (change_id),
-    KEY idx_pcl_user (user_id),
-    KEY idx_pcl_time (changed_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限变更快照（只追加）';
+    KEY idx_log_user (user_id),
+    KEY idx_log_type_time (log_type, operate_time),
+    KEY idx_log_system (system_code),
+    KEY idx_log_request (request_id),
+    CONSTRAINT chk_log_type CHECK (log_type IN ('ACTION', 'PERMISSION_CHANGE'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一日志（只追加、永久保存）';
 
 SET FOREIGN_KEY_CHECKS = 1;

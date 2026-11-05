@@ -279,7 +279,7 @@ e. 课程要求：第一次检查用面向功能（结构化）方式实现 RBAC
 * 身份与组织：组织机构（`iam_org`，四级树：总公司 / 分公司 / 部门 / 项目经理部）、账号 / 员工（`iam_user`，姓名电话加密、账号状态）。
 * RBAC 授权核心：角色（`iam_role`）、角色互斥（`iam_role_exclusion`）、用户-角色绑定（`iam_user_role`，含有效期）、角色-功能授权（`iam_role_function`，`allowed_action`）、角色-数据范围授权（`iam_role_data_scope`）、数据范围字典（`iam_data_scope`）。
 * 业务接入：业务接入系统（`iam_system`）、功能模块（`iam_module`）、功能点（`iam_function_point`，含 API 路径 + 方法）。
-* 运行与审计：令牌（`iam_token`，可吊销）、审计日志（`iam_audit_log`，永久）、权限变更记录（`iam_permission_change_log`，前后快照）。
+* 运行与日志：令牌（`iam_token`，可吊销）、统一日志（`iam_log`，永久保存）；以 `log_type` 区分普通操作与权限变更，权限变更保存前后快照。
 
 RBAC0 的核心是两个多对多关系：用户 ↔（用户-角色）↔ 角色 ↔（角色-功能授权）↔ 功能点。
 

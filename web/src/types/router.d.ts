@@ -8,6 +8,6 @@ declare module 'vue-router' {
     description?: string
     icon?: string
     public?: boolean
-    functionPointId?: number
+    permissionId?: number
   }
 }

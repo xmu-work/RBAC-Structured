@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Promotion } from '@element-plus/icons-vue'
 import { grantRole, listRoles } from '@/api/role.api'
 import { listUsers } from '@/api/user.api'
 import { useAuthStore } from '@/stores/auth.store'
-import type { BusinessError } from '@/utils/request'
 import { toFieldErrors } from '@/utils/formErrors'
 import type { Role } from '@/types/role.types'
 import type { User } from '@/types/user.types'
-import { ADMIN_API_FUNCTION_POINTS as FP } from '@/constants/permissions'
+import { ADMIN_ACTION_PERMISSIONS as FP } from '@/constants/permissions'
 
 /**
  * 授予表单卡（契约 8.6）：选人 → 单角色授予（后端不支持批量）。
  * expireTime 以 ISO 本地格式传参（契约 3.3），留空 = 长期；grantReason 必填留痕；
- * 3001 互斥冲突弹窗点名冲突角色（UC-05），3005 重复授权由拦截器 toast。
+ * 重复授权等业务错误由统一请求层提示。
  */
 const emit = defineEmits<{ granted: [userId: number]; userChange: [userId: number | null] }>()
 
@@ -96,16 +95,7 @@ async function submit(): Promise<void> {
     formRef.value?.clearValidate()
     emit('granted', form.userId)
   } catch (error) {
-    const business = error as BusinessError
-    if (business && typeof business === 'object' && business.code === 3001) {
-      // UC-05：互斥冲突弹窗点名冲突角色（message 含冲突详情）
-      await ElMessageBox.alert(business.message, '互斥角色冲突', {
-        type: 'error',
-        confirmButtonText: '知道了',
-      }).catch(() => undefined)
-    } else {
-      serverErrors.value = toFieldErrors(error)
-    }
+    serverErrors.value = toFieldErrors(error)
   } finally {
     submitting.value = false
   }
@@ -120,7 +110,7 @@ async function submit(): Promise<void> {
         <div>
           <h2 class="grant-form-card__title">授予角色</h2>
           <p class="grant-form-card__hint">
-            单角色授予；到期时间留空表示长期有效；互斥角色将被拒绝（UC-05）
+            单角色授予；到期时间留空表示长期有效
           </p>
         </div>
       </div>
@@ -175,7 +165,7 @@ async function submit(): Promise<void> {
         />
       </el-form-item>
       <el-form-item class="grant-form-card__submit">
-        <el-button v-perm.disable="FP.GRANT_CREATE" type="primary" :icon="Promotion" :loading="submitting" @click="submit">
+        <el-button v-perm.disable="FP.ROLE_ASSIGN" type="primary" :icon="Promotion" :loading="submitting" @click="submit">
           授予
         </el-button>
       </el-form-item>

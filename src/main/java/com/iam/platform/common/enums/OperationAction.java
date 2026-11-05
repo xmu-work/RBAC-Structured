@@ -8,10 +8,10 @@ import java.util.Set;
 /**
  * 功能点操作取值枚举（共 12 种）。
  *
- * <p>对应数据库 iam_function_point.action 字段与 SRS 4.4 FR-18。
+ * <p>对应数据库 iam_permission.action 字段与 SRS 4.4 FR-18。
  *
  * <p>每种取值映射为一组基础操作能力（VIEW/ADD/EDIT/APPROVE/EXPORT），
- * 判定时要求“已授予操作（iam_role_function.allowed_action）覆盖功能点声明的操作”，
+ * 判定时要求“已授予操作（iam_role_permission.allowed_action）覆盖权限声明的操作”，
  * 从而让查看、编辑、审批等差异真正参与决策，而不是只比对功能点 ID。
  */
 @Getter
